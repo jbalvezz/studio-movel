@@ -32,7 +32,7 @@ vez só por conta; simples, em português, usável com uma mão.
 3. ~~Passo 6 (segredos)~~ **Feito.** Se uma build falhar, o erro do Kotlin/Gradle aparece como anotação pública:
    `api.github.com/repos/jbalvezz/studio-movel/check-runs/<job_id>/annotations` (logs exigem login).
 4. ~~Passo 7~~ **Feito: app "Em produção"** (não verificado, limite 100 usuários; aviso amarelo "precisa ser
-   verificado" é esperado — NÃO enviar para verificação). ~~Passo 8~~ **Feito.** → **Próximo: Fase 3.**
+   verificado" é esperado — NÃO enviar para verificação). ~~Passo 8~~ **Feito.** → Fase 3 feita (item 9).
 5. **Fase 3** — mudar visibilidade (videos.update part=status — mandar o objeto status inteiro para não
    zerar madeForKids/embeddable etc.), comentários (listar/responder/moderar).
 6. **Fase 4** — e-mail (Gmail API).
@@ -52,6 +52,16 @@ vez só por conta; simples, em português, usável com uma mão.
      sem JavaScript; links abrem fora).
    - Envelope ✉️ no cartão do canal e na tela de vídeos abre a caixa daquele canal.
    - Falta na fase 4: responder, arquivar, buscar, contador de não lidos no cartão.
+9. **v0.5 (2026-11-26) — Fase 3 — AGUARDANDO TESTE do usuário.**
+   - Visibilidade: tocar no selo do vídeo (ou menu ⋮ → Mudar visibilidade) → Público / Não listado /
+     Privado / Agendar (data+hora; vira private + publishAt). `YouTubeApi.mudarVisibilidade` lê o status
+     atual e reenvia os campos graváveis (embeddable, license, publicStatsViewable, selfDeclaredMadeForKids,
+     containsSyntheticMedia) para não zerar nada. Tela: `DialogoVisibilidade.kt`.
+   - Comentários (`TelasComentarios.kt`): por vídeo (menu ⋮ → Comentários) ou do canal todo (ícone de
+     sino na tela de vídeos, `allThreadsRelatedToChannelId`, com título do vídeo). Responder (comments.insert),
+     Ocultar (setModerationStatus=heldForReview → vai para "Em análise" no Studio, reversível).
+   - `Rede.kt` ganhou PUT e POST sem corpo. Cota: update/insert/moderar custam 50 cada (limite 10.000/dia).
+   - Ainda não feito: editar título/descrição, curtir/fixar comentário, apagar a própria resposta.
 - Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
