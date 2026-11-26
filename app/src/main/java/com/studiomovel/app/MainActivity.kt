@@ -383,10 +383,33 @@ fun CartaoCanal(
     }
 }
 
-/** Abre o Gmail já na conta certa (pelo navegador, que guarda o login de cada conta). */
+/**
+ * Abre o Gmail da conta certa NO NAVEGADOR.
+ * Não pode ir pelo app do Gmail: ele "pega" o link mail.google.com, não entende a conta na URL e trava.
+ * Por isso o link vai direto para o navegador (de preferência o Chrome).
+ */
 fun abrirGmail(ctx: android.content.Context, email: String) {
-    val url = "https://mail.google.com/mail/u/" + Uri.encode(email) + "/#inbox"
-    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    val uri = Uri.parse("https://mail.google.com/mail/u/" + Uri.encode(email) + "/#inbox")
+    val pm = ctx.packageManager
+    // Descobre qual é o navegador do celular perguntando "quem abre um site qualquer?"
+    val padrao = pm.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com")), 0)
+        ?.activityInfo?.packageName
+    val candidatos = listOfNotNull(
+        padrao?.takeIf { it != "android" && it != "com.google.android.gm" },
+        "com.android.chrome",
+        "com.sec.android.app.sbrowser", // Samsung Internet
+    )
+    for (pacote in candidatos) {
+        val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(pacote)
+            .addCategory(Intent.CATEGORY_BROWSABLE)
+        try {
+            ctx.startActivity(intent)
+            return
+        } catch (e: android.content.ActivityNotFoundException) {
+            // tenta o próximo navegador
+        }
+    }
+    android.widget.Toast.makeText(ctx, "Nenhum navegador encontrado para abrir o Gmail.", android.widget.Toast.LENGTH_LONG).show()
 }
 
 @Composable
