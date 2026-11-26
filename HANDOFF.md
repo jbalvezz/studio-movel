@@ -71,7 +71,7 @@ vez só por conta; simples, em português, usável com uma mão.
    - Lição: o Bash tool transforma `\r\n` dentro de heredoc em quebra real → em Kotlin usei
      `13.toChar() + 10.toChar()`. Scripts Python grandes: escrever com Write no scratchpad e rodar.
    - Ainda não feito: buscar e-mails, escrever e-mail novo, anexos.
-11. **v0.7 (2026-11-26) — AGUARDANDO TESTE do usuário.**
+11. **v0.7 (2026-11-26) — TESTADA pelo usuário: funcionou.**
    - Caixa de entrada: segurar o dedo num e-mail entra no modo seleção (toque marca/desmarca, "Todos",
      Arquivar = messages/batchModify; Lixeira = messages/trash em paralelo, com confirmação).
    - Resposta a e-mail enviado pela própria conta vai para o destinatário original (`GmailApi.destinoResposta`).
