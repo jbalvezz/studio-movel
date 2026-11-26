@@ -62,7 +62,7 @@ vez só por conta; simples, em português, usável com uma mão.
      Ocultar (setModerationStatus=heldForReview → vai para "Em análise" no Studio, reversível).
    - `Rede.kt` ganhou PUT e POST sem corpo. Cota: update/insert/moderar custam 50 cada (limite 10.000/dia).
    - Ainda não feito: editar título/descrição, curtir/fixar comentário, apagar a própria resposta.
-10. **v0.6 (2026-11-26) — e-mail: responder/arquivar/lixeira — AGUARDANDO TESTE do usuário.**
+10. **v0.6 (2026-11-26) — e-mail: responder/arquivar/lixeira — TESTADA pelo usuário: funcionou (respostas entre contas chegam certo).**
    - `TelaMensagem` ganhou barra embaixo: Responder (diálogo; `GmailApi.responder` monta MIME text/plain
      base64 com In-Reply-To/References e threadId → messages/send, cai na mesma conversa), Arquivar
      (remove INBOX), Lixeira (messages/trash, com confirmação; recuperável por 30 dias).
@@ -71,6 +71,14 @@ vez só por conta; simples, em português, usável com uma mão.
    - Lição: o Bash tool transforma `\r\n` dentro de heredoc em quebra real → em Kotlin usei
      `13.toChar() + 10.toChar()`. Scripts Python grandes: escrever com Write no scratchpad e rodar.
    - Ainda não feito: buscar e-mails, escrever e-mail novo, anexos.
+11. **v0.7 (2026-11-26) — AGUARDANDO TESTE do usuário.**
+   - Caixa de entrada: segurar o dedo num e-mail entra no modo seleção (toque marca/desmarca, "Todos",
+     Arquivar = messages/batchModify; Lixeira = messages/trash em paralelo, com confirmação).
+   - Resposta a e-mail enviado pela própria conta vai para o destinatário original (`GmailApi.destinoResposta`).
+   - Vídeos: menu ⋮ → "Editar título e descrição" (`DialogoEditar.kt`). `YouTubeApi.editarTextos` lê o
+     snippet atual e reenvia categoryId/tags/idiomas (senão o YouTube apaga). Limites: título 100, descrição
+     5000 bytes, sem < >.
+   - Ideias futuras: buscar e-mails, escrever e-mail novo, curtir/fixar comentário, editar tags/miniatura.
 - Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
