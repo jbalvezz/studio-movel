@@ -11,6 +11,21 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +42,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -97,18 +113,57 @@ class MainActivity : ComponentActivity() {
 
 // ---------- Tema ----------
 
+// Cores tiradas do ícone: azul-ciano, roxo e vermelho do play.
+private val CorFundo1 = Color(0xFF0B0E22)
+private val CorFundo2 = Color(0xFF16123A)
+val CorCartao = Color(0xFF1D1A44).copy(alpha = 0.78f)
+
 @Composable
 fun Tema(conteudo: @Composable () -> Unit) {
-    val escuro = isSystemInDarkTheme()
-    val ctx = LocalContext.current
-    val cores = when {
-        Build.VERSION.SDK_INT >= 31 -> if (escuro) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        escuro -> darkColorScheme(primary = Color(0xFFB69CFF), secondary = Color(0xFF6FD3FF))
-        else -> lightColorScheme(primary = Color(0xFF5B2BB5), secondary = Color(0xFF0B6FA8))
-    }
+    val cores = darkColorScheme(
+        primary = Color(0xFF5FE3FF),
+        onPrimary = Color(0xFF00222B),
+        secondary = Color(0xFFB08CFF),
+        tertiary = Color(0xFFFF4D5E),
+        background = CorFundo1,
+        surface = Color(0xFF1D1A44),
+        surfaceVariant = Color(0xFF2A2660),
+        onSurfaceVariant = Color(0xFFC4C2E8),
+        primaryContainer = Color(0xFF0E5D73),
+        onPrimaryContainer = Color(0xFFD5F6FF),
+        secondaryContainer = Color(0xFF3B2C7A),
+        onSecondaryContainer = Color(0xFFEDE5FF),
+    )
     MaterialTheme(colorScheme = cores) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) { conteudo() }
+        Box(Modifier.fillMaxSize().drawBehind { fundo() }) {
+            // Marca d'água discreta com o ícone, no canto de baixo.
+            Image(
+                painter = painterResource(R.drawable.marca_dagua),
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(bottom = 40.dp).size(260.dp)
+                    .offset(x = 70.dp).alpha(0.07f),
+            )
+            // Surface transparente: só para o texto ficar claro sobre o fundo escuro.
+            Surface(Modifier.fillMaxSize(), color = Color.Transparent, contentColor = cores.onBackground) { conteudo() }
+        }
     }
+}
+
+/** Degradê escuro com brilhos suaves nas cores do ícone. */
+private fun DrawScope.fundo() {
+    drawRect(Brush.verticalGradient(listOf(CorFundo1, CorFundo2, CorFundo1)))
+    fun brilho(cor: Color, cx: Float, cy: Float, raio: Float) = drawCircle(
+        brush = Brush.radialGradient(
+            listOf(cor, Color.Transparent),
+            center = Offset(size.width * cx, size.height * cy),
+            radius = size.minDimension * raio,
+        ),
+        radius = size.minDimension * raio,
+        center = Offset(size.width * cx, size.height * cy),
+    )
+    brilho(Color(0x447B4DFF), 0.05f, 0.08f, 0.9f)  // roxo
+    brilho(Color(0x3322D3EE), 1.0f, 0.45f, 0.8f)   // ciano
+    brilho(Color(0x22FF3B4E), 0.15f, 1.0f, 0.7f)   // vermelho
 }
 
 // ---------- Navegação ----------
@@ -146,6 +201,8 @@ fun TelaCanais(
     val aviso = remember { SnackbarHostState() }
     var ocupado by remember { mutableStateOf(false) }
     var paraRemover by remember { mutableStateOf<ContaCanal?>(null) }
+    var organizando by rememberSaveable { mutableStateOf(false) }
+    val ctx = LocalContext.current
 
     fun adicionar() {
         escopo.launch {
@@ -190,9 +247,16 @@ fun TelaCanais(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Meus canais") },
+                title = { Text(if (organizando) "Organizar canais" else "Meus canais") },
+                colors = barraTransparente(),
                 actions = {
-                    if (lista.isNotEmpty()) {
+                    if (lista.size > 1 || organizando) {
+                        IconButton(onClick = { organizando = !organizando }) {
+                            if (organizando) Icon(Icons.Default.Check, contentDescription = "Concluir")
+                            else Icon(Icons.Default.Edit, contentDescription = "Organizar canais")
+                        }
+                    }
+                    if (lista.isNotEmpty() && !organizando) {
                         IconButton(onClick = { atualizarTodos() }, enabled = !ocupado) {
                             Icon(Icons.Default.Refresh, contentDescription = "Atualizar")
                         }
@@ -200,8 +264,9 @@ fun TelaCanais(
                 },
             )
         },
+        containerColor = Color.Transparent,
         floatingActionButton = {
-            ExtendedFloatingActionButton(
+            if (!organizando) ExtendedFloatingActionButton(
                 onClick = { if (!ocupado) adicionar() },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
                 text = { Text("Adicionar canal") },
@@ -223,8 +288,23 @@ fun TelaCanais(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(lista, key = { it.email }) { c ->
-                        CartaoCanal(c, abrir = { abrir(c) }, remover = { paraRemover = c })
+                    if (organizando) item {
+                        Text(
+                            "Use as setas para mudar a ordem. Toque no ✓ lá em cima quando terminar.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    itemsIndexed(lista, key = { _, c -> c.email }) { i, c ->
+                        CartaoCanal(
+                            c = c,
+                            organizando = organizando,
+                            abrir = { abrir(c) },
+                            gmail = { abrirGmail(ctx, c.email) },
+                            subir = if (i > 0) ({ contas.mover(c.email, -1); aoMudar() }) else null,
+                            descer = if (i < lista.lastIndex) ({ contas.mover(c.email, 1); aoMudar() }) else null,
+                            remover = { paraRemover = c },
+                        )
                     }
                 }
             }
@@ -245,8 +325,19 @@ fun TelaCanais(
 }
 
 @Composable
-fun CartaoCanal(c: ContaCanal, abrir: () -> Unit, remover: () -> Unit) {
-    Card(Modifier.fillMaxWidth().clickable(onClick = abrir)) {
+fun CartaoCanal(
+    c: ContaCanal,
+    organizando: Boolean,
+    abrir: () -> Unit,
+    gmail: () -> Unit,
+    subir: (() -> Unit)?,
+    descer: (() -> Unit)?,
+    remover: () -> Unit,
+) {
+    Card(
+        Modifier.fillMaxWidth().clickable(enabled = !organizando, onClick = abrir),
+        colors = CardDefaults.cardColors(containerColor = CorCartao),
+    ) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             AsyncImage(
                 model = c.foto,
@@ -269,12 +360,40 @@ fun CartaoCanal(c: ContaCanal, abrir: () -> Unit, remover: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = remover) {
-                Icon(Icons.Default.Delete, contentDescription = "Remover canal")
+            if (organizando) {
+                IconButton(onClick = { subir?.invoke() }, enabled = subir != null) {
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Subir")
+                }
+                IconButton(onClick = { descer?.invoke() }, enabled = descer != null) {
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Descer")
+                }
+                IconButton(onClick = remover) {
+                    Icon(Icons.Default.Delete, contentDescription = "Remover canal")
+                }
+            } else {
+                IconButton(onClick = gmail) {
+                    Icon(
+                        Icons.Default.Email,
+                        contentDescription = "Abrir Gmail desta conta",
+                        tint = MaterialTheme.colorScheme.tertiary,
+                    )
+                }
             }
         }
     }
 }
+
+/** Abre o Gmail já na conta certa (pelo navegador, que guarda o login de cada conta). */
+fun abrirGmail(ctx: android.content.Context, email: String) {
+    val url = "https://mail.google.com/mail/u/" + Uri.encode(email) + "/#inbox"
+    ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+}
+
+@Composable
+fun barraTransparente() = TopAppBarDefaults.topAppBarColors(
+    containerColor = Color.Transparent,
+    scrolledContainerColor = Color.Transparent,
+)
 
 // ---------- Tela 2: vídeos de um canal ----------
 
@@ -290,6 +409,7 @@ fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit) {
     var carregando by remember { mutableStateOf(true) }
     var erro by remember { mutableStateOf<String?>(null) }
     var filtro by rememberSaveable { mutableStateOf(Filtro.TODOS) }
+    val ctx = LocalContext.current
 
     fun carregar() {
         escopo.launch {
@@ -324,18 +444,23 @@ fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text(conta.titulo, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                colors = barraTransparente(),
                 navigationIcon = {
                     IconButton(onClick = voltar) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Voltar")
                     }
                 },
                 actions = {
+                    IconButton(onClick = { abrirGmail(ctx, conta.email) }) {
+                        Icon(Icons.Default.Email, contentDescription = "Gmail", tint = MaterialTheme.colorScheme.tertiary)
+                    }
                     IconButton(onClick = { carregar() }, enabled = !carregando) {
                         Icon(Icons.Default.Refresh, contentDescription = "Atualizar")
                     }
                 },
             )
         },
+        containerColor = Color.Transparent,
     ) { margem ->
         Column(Modifier.padding(margem).fillMaxSize()) {
             Row(

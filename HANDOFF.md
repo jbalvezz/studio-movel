@@ -35,7 +35,14 @@ vez só por conta; simples, em português, usável com uma mão.
    verificado" é esperado — NÃO enviar para verificação). ~~Passo 8~~ **Feito.** → **Próximo: Fase 3.**
 5. **Fase 3** — mudar visibilidade (videos.update part=status — mandar o objeto status inteiro para não
    zerar madeForKids/embeddable etc.), comentários (listar/responder/moderar).
-6. **Fase 4** — e-mail (Gmail API). 7. Ícone do usuário (`Studio_Movel_Icone_120x120.png`) como ícone do app.
+6. **Fase 4** — e-mail (Gmail API).
+7. **Pedidos do usuário após testar a fase 2 (2026-11-25):**
+   - Ícone do app = imagem criada pelo usuário (`Studio_Movel_Icone_120x120.png`, local ainda não informado;
+     120 px é pouco — pedir versão maior, ideal 512×512).
+   - Fundo da tela com imagem discreta (hoje tudo preto).
+   - Reordenar canais na tela inicial (arrastar ou setas ↑↓).
+   - E-mail: no mínimo um botão "Gmail" por canal (atalho rápido) até a caixa unificada da fase 4.
+- Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
 - **Kotlin + Jetpack Compose**, app nativo. APK gerado no **GitHub Actions** → usuário não precisa

@@ -46,6 +46,17 @@ class Contas(context: Context) {
 
     fun remover(email: String) = gravar(listar().filter { it.email != email })
 
+    /** Sobe (passo = -1) ou desce (passo = +1) um canal na lista. */
+    fun mover(email: String, passo: Int) {
+        val lista = listar().toMutableList()
+        val i = lista.indexOfFirst { it.email == email }
+        val j = i + passo
+        if (i < 0 || j !in lista.indices) return
+        val c = lista.removeAt(i)
+        lista.add(j, c)
+        gravar(lista)
+    }
+
     private fun gravar(lista: List<ContaCanal>) {
         val arr = JSONArray()
         lista.forEach { c ->
