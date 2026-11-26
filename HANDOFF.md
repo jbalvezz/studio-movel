@@ -79,6 +79,16 @@ vez só por conta; simples, em português, usável com uma mão.
      snippet atual e reenvia categoryId/tags/idiomas (senão o YouTube apaga). Limites: título 100, descrição
      5000 bytes, sem < >.
    - Ideias futuras: buscar e-mails, escrever e-mail novo, curtir/fixar comentário, editar tags/miniatura.
+12. **v0.8 (2026-11-26) — AGUARDANDO TESTE do usuário.**
+   - E-mail: lupa na caixa → busca em todos os e-mails (`messages?q=`, mesma sintaxe do Gmail);
+     botão "Escrever" → `DialogoEscrever` (vários destinatários separados por vírgula). `GmailApi.enviar`
+     é o montador MIME comum para responder e escrever.
+   - Vídeos: diálogo de edição agora tem Tags (limite 500, tag com espaço conta +2). Menu ⋮ → "Trocar
+     miniatura": seletor de fotos do Android → `prepararMiniatura` (máx. 1280 px, JPEG < 2 MB) →
+     `thumbnails.set` via `Rede.enviarArquivo`. Exige canal verificado por telefone.
+   - NÃO dá via API do YouTube: curtir e fixar comentário (não existe na Data API v3). Fica no Studio.
+   - Segurança conferida: repositório só tem código; nenhum e-mail pessoal, senha ou token versionado
+     (commits com e-mail noreply). Recomendado ao usuário: 2 etapas no GitHub e nas contas Google.
 - Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
