@@ -26,7 +26,9 @@ vez só por conta; simples, em português, usável com uma mão.
 
 ## Pendências (ordem)
 1. **Usuário:** passos 4–5 do guia (cliente Android com SHA-1; criar repo público `studio-movel` vazio) e informar o usuário do GitHub.
-2. Commit (usar e-mail noreply do GitHub, não o Gmail) + `git remote add` + push. Sem `gh` instalado.
+2. ~~Commit + push~~ **Feito**: https://github.com/jbalvezz/studio-movel (branch `main`). Push pelo
+   terminal do app (o Git Credential Manager abre o navegador; o Bash não-interativo não consegue).
+   Status das builds (repo público): `https://api.github.com/repos/jbalvezz/studio-movel/actions/runs`.
 3. **Usuário:** passo 6 (segredos KEYSTORE_BASE64/KEYSTORE_PASSWORD + Run workflow). Se o build falhar,
    ler o log do Actions e corrigir (primeira compilação real do código!).
 4. **Usuário:** passo 7 (Pages, Branding com links, publicar) e passo 8 (instalar, adicionar canais).
