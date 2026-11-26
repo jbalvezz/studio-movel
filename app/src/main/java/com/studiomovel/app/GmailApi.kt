@@ -101,11 +101,19 @@ object GmailApi {
     }
 
     /** Responde ao e-mail (sai da própria conta, na mesma conversa, e fica em "Enviados"). */
-    suspend fun responder(token: String, m: EmailCompleto, texto: String) {
+    /**
+     * Para quem a resposta vai. Se a mensagem foi enviada pela própria conta (ex.: você abriu
+     * algo que você mesmo mandou), responde para o destinatário original, igual ao Gmail.
+     */
+    fun destinoResposta(m: EmailCompleto, meuEmail: String): String =
+        if (soEmail(m.remetente).equals(meuEmail, ignoreCase = true) && m.para.isNotBlank()) m.para
+        else m.responderPara
+
+    suspend fun responder(token: String, m: EmailCompleto, texto: String, meuEmail: String) {
         val assunto = if (m.assunto.startsWith("Re:", ignoreCase = true)) m.assunto else "Re: ${m.assunto}"
         val cab = StringBuilder()
         val fim = "" + 13.toChar() + 10.toChar() // quebra de linha de e-mail (CR LF)
-        val para = m.responderPara.filter { it != 13.toChar() && it != 10.toChar() }
+        val para = destinoResposta(m, meuEmail).filter { it != 13.toChar() && it != 10.toChar() }
         cab.append("To: ").append(para).append(fim)
         cab.append("Subject: =?UTF-8?B?").append(b64(assunto.toByteArray(Charsets.UTF_8), false)).append("?=").append(fim)
         if (m.idMensagem.isNotBlank()) {
@@ -129,6 +137,23 @@ object GmailApi {
     /** Manda para a lixeira (o Gmail apaga de vez depois de 30 dias). */
     suspend fun lixeira(token: String, id: String) {
         Rede.post("$BASE/messages/$id/trash", token)
+    }
+
+    /** Arquiva vários de uma vez (uma chamada só). */
+    suspend fun arquivarVarios(token: String, ids: Collection<String>) {
+        if (ids.isEmpty()) return
+        val lista = JSONArray().apply { ids.forEach { put(it) } }
+        Rede.post(
+            "$BASE/messages/batchModify",
+            token,
+            JSONObject().put("ids", lista).put("removeLabelIds", JSONArray().put("INBOX")),
+        )
+    }
+
+    /** Manda vários para a lixeira (todos ao mesmo tempo). */
+    suspend fun lixeiraVarios(token: String, ids: Collection<String>) = coroutineScope {
+        ids.map { id -> async { lixeira(token, id) } }.awaitAll()
+        Unit
     }
 
     /** Quantas conversas não lidas há na caixa de entrada. */
@@ -173,6 +198,10 @@ object GmailApi {
 
     private fun desfazerEntidades(s: String): String =
         Html.fromHtml(s, Html.FROM_HTML_MODE_LEGACY).toString()
+
+    /** "Fulano de Tal <fulano@x.com>" -> "fulano@x.com" */
+    fun soEmail(from: String): String =
+        if (from.contains("<")) from.substringAfter("<").substringBefore(">").trim() else from.trim()
 
     /** "Fulano de Tal <fulano@x.com>" -> "Fulano de Tal" */
     fun soNome(from: String): String {

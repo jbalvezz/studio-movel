@@ -453,6 +453,7 @@ fun TelaVideos(
     var erro by remember { mutableStateOf<String?>(null) }
     var filtro by rememberSaveable { mutableStateOf(Filtro.TODOS) }
     var mudando by remember { mutableStateOf<Video?>(null) }
+    var editando by remember { mutableStateOf<Video?>(null) }
     var salvando by remember { mutableStateOf(false) }
     val aviso = remember { SnackbarHostState() }
 
@@ -577,11 +578,30 @@ fun TelaVideos(
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     items(visiveis, key = { it.id }) { v ->
-                        ItemVideo(v, mudarVisibilidade = { mudando = v }, comentarios = { abrirComentarios(v) })
+                        ItemVideo(
+                            v,
+                            mudarVisibilidade = { mudando = v },
+                            comentarios = { abrirComentarios(v) },
+                            editar = { editando = v },
+                        )
                     }
                 }
             }
         }
+    }
+
+    editando?.let { v ->
+        DialogoEditar(
+            v = v,
+            conta = conta,
+            aut = aut,
+            fechar = { editando = null },
+            salvo = { novoTitulo ->
+                videos = videos.map { if (it.id == v.id) it.copy(titulo = novoTitulo) else it }
+                editando = null
+                escopo.launch { aviso.showSnackbar("Título e descrição salvos!") }
+            },
+        )
     }
 
     mudando?.let { v ->
@@ -595,7 +615,7 @@ fun TelaVideos(
 }
 
 @Composable
-fun ItemVideo(v: Video, mudarVisibilidade: () -> Unit, comentarios: () -> Unit) {
+fun ItemVideo(v: Video, mudarVisibilidade: () -> Unit, comentarios: () -> Unit, editar: () -> Unit) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     fun abrirLink(url: String) = ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -633,6 +653,10 @@ fun ItemVideo(v: Video, mudarVisibilidade: () -> Unit, comentarios: () -> Unit) 
                 Icon(Icons.Default.MoreVert, contentDescription = "Opções")
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Editar título e descrição") },
+                    onClick = { menu = false; editar() },
+                )
                 DropdownMenuItem(
                     text = { Text("Mudar visibilidade") },
                     onClick = { menu = false; mudarVisibilidade() },

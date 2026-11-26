@@ -10,7 +10,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -69,7 +73,12 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (String) -> Unit) {
-    BackHandler(onBack = voltar)
+    var selecionados by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var confirmarLixeira by remember { mutableStateOf(false) }
+    var ocupado by remember { mutableStateOf(false) }
+    val aviso = remember { SnackbarHostState() }
+    val selecionando = selecionados.isNotEmpty()
+    BackHandler { if (selecionando) selecionados = emptySet() else voltar() }
     val escopo = rememberCoroutineScope()
     var emails by remember { mutableStateOf<List<Email>>(emptyList()) }
     var proxima by remember { mutableStateOf<String?>(null) }
@@ -116,9 +125,51 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
     }
     LaunchedEffect(conta.email) { carregar() }
 
+    /** Arquiva ou manda para a lixeira todos os selecionados. */
+    fun emLote(lixeira: Boolean) {
+        val ids = selecionados.toList()
+        escopo.launch {
+            ocupado = true
+            try {
+                val token = aut.token(conta.email) ?: return@launch
+                if (lixeira) GmailApi.lixeiraVarios(token, ids) else GmailApi.arquivarVarios(token, ids)
+                emails = emails.filter { it.id !in ids }
+                selecionados = emptySet()
+                val n = ids.size
+                aviso.showSnackbar(
+                    if (lixeira) "$n ${if (n == 1) "e-mail foi" else "e-mails foram"} para a lixeira."
+                    else "$n ${if (n == 1) "e-mail arquivado" else "e-mails arquivados"}."
+                )
+            } catch (e: Exception) {
+                aviso.showSnackbar(mensagemErro(e))
+            } finally {
+                ocupado = false
+            }
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(aviso) },
         topBar = {
-            TopAppBar(
+            if (selecionando) TopAppBar(
+                title = { Text("${selecionados.size} selecionado" + if (selecionados.size > 1) "s" else "") },
+                colors = barraTransparente(),
+                navigationIcon = {
+                    IconButton(onClick = { selecionados = emptySet() }) {
+                        Icon(Icons.Default.Close, contentDescription = "Cancelar seleção")
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = { selecionados = emails.map { it.id }.toSet() },
+                        enabled = !ocupado,
+                    ) { Text("Todos") }
+                    TextButton(onClick = { emLote(lixeira = false) }, enabled = !ocupado) { Text("Arquivar") }
+                    TextButton(onClick = { confirmarLixeira = true }, enabled = !ocupado) {
+                        Text("Lixeira", color = MaterialTheme.colorScheme.tertiary)
+                    }
+                },
+            ) else TopAppBar(
                 title = {
                     Column {
                         Text("E-mail", maxLines = 1)
@@ -147,6 +198,7 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
         containerColor = Color.Transparent,
     ) { margem ->
         Box(Modifier.padding(margem).fillMaxSize()) {
+            if (ocupado) LinearProgressIndicator(Modifier.fillMaxWidth().align(Alignment.TopCenter))
             when {
                 carregando -> CircularProgressIndicator(Modifier.align(Alignment.Center))
                 erro != null && emails.isEmpty() -> Column(
@@ -163,11 +215,31 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    if (!selecionando) item {
+                        Text(
+                            "Dica: segure o dedo num e-mail para selecionar vários.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
+                        )
+                    }
                     items(emails, key = { it.id }) { e ->
-                        ItemEmail(e) {
-                            emails = emails.map { if (it.id == e.id) it.copy(naoLido = false) else it }
-                            abrir(e.id)
+                        fun alternar() {
+                            selecionados = if (e.id in selecionados) selecionados - e.id else selecionados + e.id
                         }
+                        ItemEmail(
+                            e = e,
+                            selecionado = e.id in selecionados,
+                            aoTocar = {
+                                if (selecionando) {
+                                    alternar()
+                                } else {
+                                    emails = emails.map { if (it.id == e.id) it.copy(naoLido = false) else it }
+                                    abrir(e.id)
+                                }
+                            },
+                            aoSegurar = { alternar() },
+                        )
                     }
                     if (proxima != null) item {
                         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -179,26 +251,46 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
             }
         }
     }
+    if (confirmarLixeira) {
+        val n = selecionados.size
+        AlertDialog(
+            onDismissRequest = { confirmarLixeira = false },
+            title = { Text("Mandar $n ${if (n == 1) "e-mail" else "e-mails"} para a lixeira?") },
+            text = { Text("Eles vão para a lixeira do Gmail. Dá para recuperar por lá durante 30 dias.") },
+            confirmButton = {
+                TextButton(onClick = { confirmarLixeira = false; emLote(lixeira = true) }) { Text("Mandar para a lixeira") }
+            },
+            dismissButton = { TextButton(onClick = { confirmarLixeira = false }) { Text("Cancelar") } },
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ItemEmail(e: Email, aoTocar: () -> Unit) {
+fun ItemEmail(e: Email, selecionado: Boolean, aoTocar: () -> Unit, aoSegurar: () -> Unit) {
     val peso = if (e.naoLido) FontWeight.Bold else FontWeight.Normal
     Card(
-        Modifier.fillMaxWidth().clickable(onClick = aoTocar),
-        colors = CardDefaults.cardColors(containerColor = CorCartao),
+        Modifier.fillMaxWidth().combinedClickable(onClick = aoTocar, onLongClick = aoSegurar),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selecionado) MaterialTheme.colorScheme.primaryContainer else CorCartao
+        ),
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
             // Bolinha com a inicial do remetente
             Surface(
-                color = if (e.naoLido) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                color = when {
+                    selecionado -> MaterialTheme.colorScheme.primary
+                    e.naoLido -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                },
                 shape = CircleShape,
                 modifier = Modifier.size(40.dp),
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text(
-                        e.remetente.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?",
+                        if (selecionado) "✓" else e.remetente.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "?",
                         fontWeight = FontWeight.Bold,
+                        color = if (selecionado) MaterialTheme.colorScheme.onPrimary else Color.Unspecified,
                     )
                 }
             }
@@ -360,7 +452,7 @@ fun TelaMensagem(conta: ContaCanal, aut: Autorizador, id: String, voltar: () -> 
             text = {
                 Column {
                     Text(
-                        "Para: ${GmailApi.soNome(m.responderPara)}",
+                        "Para: ${GmailApi.destinoResposta(m, conta.email)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -386,7 +478,7 @@ fun TelaMensagem(conta: ContaCanal, aut: Autorizador, id: String, voltar: () -> 
                     onClick = {
                         val t = texto.trim()
                         acao(false, "Resposta enviada!") {
-                            GmailApi.responder(it, m, t)
+                            GmailApi.responder(it, m, t, conta.email)
                             respondendo = false
                         }
                     },

@@ -156,6 +156,35 @@ object YouTubeApi {
         Rede.post("$BASE/comments/setModerationStatus?id=$comentarioId&moderationStatus=heldForReview", token)
     }
 
+    /** Título e descrição atuais do vídeo. */
+    suspend fun textos(token: String, videoId: String): Pair<String, String> {
+        val s = Rede.get("$BASE/videos?part=snippet&id=$videoId", token)
+            .optJSONArray("items")?.optJSONObject(0)?.optJSONObject("snippet")
+            ?: throw ErroApi(404, "Vídeo não encontrado.")
+        return s.optString("title") to s.optString("description")
+    }
+
+    /**
+     * Troca título e descrição. Lê o snippet atual e reenvia categoria, tags e idiomas,
+     * porque o YouTube apaga o que não for mandado de volta.
+     */
+    suspend fun editarTextos(token: String, videoId: String, titulo: String, descricao: String) {
+        val atual = Rede.get("$BASE/videos?part=snippet&id=$videoId", token)
+            .optJSONArray("items")?.optJSONObject(0)?.optJSONObject("snippet")
+            ?: throw ErroApi(404, "Vídeo não encontrado.")
+        val novo = JSONObject()
+        for (campo in listOf("categoryId", "tags", "defaultLanguage", "defaultAudioLanguage")) {
+            if (atual.has(campo)) novo.put(campo, atual.get(campo))
+        }
+        novo.put("title", titulo)
+        novo.put("description", descricao)
+        Rede.put(
+            "$BASE/videos?part=snippet",
+            token,
+            JSONObject().put("id", videoId).put("snippet", novo),
+        )
+    }
+
     /** Títulos de vários vídeos de uma vez (para mostrar em qual vídeo foi o comentário). */
     suspend fun titulos(token: String, ids: List<String>): Map<String, String> {
         if (ids.isEmpty()) return emptyMap()
