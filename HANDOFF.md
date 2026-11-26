@@ -44,8 +44,14 @@ vez só por conta; simples, em português, usável com uma mão.
    - "Organizar canais" (ícone de lápis na tela inicial): setas ↑↓ e remover; ordem salva em `Contas.mover`.
    - Botão Gmail (envelope vermelho) por canal e na tela de vídeos: abre `mail.google.com/mail/u/<email>/`
      no navegador. Atalho provisório até a caixa unificada (Fase 4).
-   - v0.3.8: o link mail.google.com era capturado pelo app do Gmail, que travava ("Gmail apresenta falhas").
-     Agora abre com setPackage no navegador padrão / Chrome / Samsung Internet (+ <queries> no manifest).
+   - Gmail pelo navegador NÃO funcionou (v0.3.8 app do Gmail travava; v0.3.9 `/u/<email>` dava 404 e
+     `?authuser=` também falhou). Atalho do navegador foi REMOVIDO.
+8. **v0.4 (2026-11-26) — e-mail dentro do app, compilada, AGUARDANDO teste:**
+   - `Rede.kt` (GET/POST + ErroApi), `GmailApi.kt` (INBOX 25 por página com cabeçalhos em paralelo,
+     abrir mensagem format=full, marcar como lido), `TelasEmail.kt` (TelaCaixa, TelaMensagem com WebView
+     sem JavaScript; links abrem fora).
+   - Envelope ✉️ no cartão do canal e na tela de vídeos abre a caixa daquele canal.
+   - Falta na fase 4: responder, arquivar, buscar, contador de não lidos no cartão.
 - Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
