@@ -12,8 +12,11 @@ class ErroApi(val codigo: Int, mensagem: String) : Exception(mensagem)
 object Rede {
     suspend fun get(url: String, token: String): JSONObject = chamar("GET", url, token, null)
 
-    suspend fun post(url: String, token: String, corpo: JSONObject): JSONObject =
+    suspend fun post(url: String, token: String, corpo: JSONObject? = null): JSONObject =
         chamar("POST", url, token, corpo)
+
+    suspend fun put(url: String, token: String, corpo: JSONObject): JSONObject =
+        chamar("PUT", url, token, corpo)
 
     private suspend fun chamar(metodo: String, url: String, token: String, corpo: JSONObject?): JSONObject =
         withContext(Dispatchers.IO) {
@@ -24,10 +27,11 @@ object Rede {
                 con.setRequestProperty("Accept", "application/json")
                 con.connectTimeout = 15_000
                 con.readTimeout = 20_000
-                if (corpo != null) {
+                if (corpo != null || metodo == "POST" || metodo == "PUT") {
+                    // Mesmo sem corpo, POST/PUT precisam mandar algo (o Google exige o tamanho).
                     con.doOutput = true
                     con.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                    con.outputStream.use { it.write(corpo.toString().toByteArray()) }
+                    con.outputStream.use { it.write((corpo?.toString() ?: "").toByteArray()) }
                 }
                 val codigo = con.responseCode
                 if (codigo !in 200..299) {

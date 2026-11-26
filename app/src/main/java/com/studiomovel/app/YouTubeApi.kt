@@ -1,5 +1,6 @@
 package com.studiomovel.app
 
+import android.text.Html
 import org.json.JSONObject
 import java.net.URLEncoder
 
@@ -13,6 +14,22 @@ data class Video(
     val views: Long,
     val comentarios: Long,
 )
+
+data class Comentario(
+    val id: String,
+    val autor: String,
+    val autorCanalId: String,
+    val foto: String,
+    val texto: String,
+    val dataIso: String,
+    val curtidas: Long,
+    val videoId: String,
+    val respostas: List<Comentario> = emptyList(),
+    val totalRespostas: Int = 0,
+    val podeResponder: Boolean = true,
+)
+
+class PaginaComentarios(val comentarios: List<Comentario>, val proxima: String?)
 
 /** Conversa com a YouTube Data API v3. */
 object YouTubeApi {
@@ -76,5 +93,94 @@ object YouTubeApi {
             )
         }
         return ids.mapNotNull { porId[it] } // mantém a ordem: mais recente primeiro
+    }
+
+    /**
+     * Muda a visibilidade: "public", "unlisted", "private" ou agendado (private + publishAt).
+     * Lê o status atual antes e reenvia tudo, para não apagar outras opções do vídeo
+     * (conteúdo para crianças, incorporação, licença...).
+     */
+    suspend fun mudarVisibilidade(token: String, videoId: String, privacidade: String, agendarPara: String?) {
+        val atual = Rede.get("$BASE/videos?part=status&id=$videoId", token)
+            .optJSONArray("items")?.optJSONObject(0)?.optJSONObject("status")
+            ?: throw ErroApi(404, "Vídeo não encontrado.")
+        val novo = JSONObject()
+        for (campo in listOf("embeddable", "license", "publicStatsViewable", "selfDeclaredMadeForKids", "containsSyntheticMedia")) {
+            if (atual.has(campo)) novo.put(campo, atual.get(campo))
+        }
+        novo.put("privacyStatus", privacidade)
+        if (agendarPara != null) novo.put("publishAt", agendarPara)
+        Rede.put(
+            "$BASE/videos?part=status",
+            token,
+            JSONObject().put("id", videoId).put("status", novo),
+        )
+    }
+
+    /** Comentários de um vídeo, ou de todos os vídeos do canal (se videoId for null). */
+    suspend fun comentarios(token: String, canalId: String, videoId: String?, pagina: String? = null): PaginaComentarios {
+        var url = "$BASE/commentThreads?part=snippet,replies&maxResults=30&order=time&textFormat=plainText"
+        url += if (videoId != null) "&videoId=$videoId" else "&allThreadsRelatedToChannelId=$canalId"
+        if (pagina != null) url += "&pageToken=" + URLEncoder.encode(pagina, "UTF-8")
+        val json = Rede.get(url, token)
+        val itens = json.optJSONArray("items")
+        val lista = (0 until (itens?.length() ?: 0)).map { i ->
+            val fio = itens!!.getJSONObject(i)
+            val s = fio.getJSONObject("snippet")
+            val principal = lerComentario(s.getJSONObject("topLevelComment"), s.optString("videoId"))
+            val resp = fio.optJSONObject("replies")?.optJSONArray("comments")
+            val respostas = (0 until (resp?.length() ?: 0))
+                .map { lerComentario(resp!!.getJSONObject(it), s.optString("videoId")) }
+                .sortedBy { it.dataIso } // mais antiga primeiro, como numa conversa
+            principal.copy(
+                respostas = respostas,
+                totalRespostas = s.optInt("totalReplyCount"),
+                podeResponder = s.optBoolean("canReply", true),
+            )
+        }
+        return PaginaComentarios(lista, json.optString("nextPageToken").ifBlank { null })
+    }
+
+    /** Responde a um comentário. Devolve a resposta já publicada. */
+    suspend fun responder(token: String, comentarioId: String, texto: String, videoId: String): Comentario {
+        val r = Rede.post(
+            "$BASE/comments?part=snippet",
+            token,
+            JSONObject().put("snippet", JSONObject().put("parentId", comentarioId).put("textOriginal", texto)),
+        )
+        return lerComentario(r, videoId).let { if (it.texto.isBlank()) it.copy(texto = texto) else it }
+    }
+
+    /** Oculta o comentário: ele vai para "Em análise" no YouTube Studio (dá para aprovar de volta lá). */
+    suspend fun ocultar(token: String, comentarioId: String) {
+        Rede.post("$BASE/comments/setModerationStatus?id=$comentarioId&moderationStatus=heldForReview", token)
+    }
+
+    /** Títulos de vários vídeos de uma vez (para mostrar em qual vídeo foi o comentário). */
+    suspend fun titulos(token: String, ids: List<String>): Map<String, String> {
+        if (ids.isEmpty()) return emptyMap()
+        val itens = Rede.get("$BASE/videos?part=snippet&id=" + ids.take(50).joinToString(","), token)
+            .optJSONArray("items") ?: return emptyMap()
+        return (0 until itens.length()).associate {
+            val v = itens.getJSONObject(it)
+            v.getString("id") to v.getJSONObject("snippet").optString("title")
+        }
+    }
+
+    private fun lerComentario(c: JSONObject, videoId: String): Comentario {
+        val s = c.optJSONObject("snippet") ?: JSONObject()
+        val texto = s.optString("textOriginal").ifBlank {
+            Html.fromHtml(s.optString("textDisplay"), Html.FROM_HTML_MODE_LEGACY).toString()
+        }
+        return Comentario(
+            id = c.optString("id"),
+            autor = s.optString("authorDisplayName"),
+            autorCanalId = s.optJSONObject("authorChannelId")?.optString("value") ?: "",
+            foto = s.optString("authorProfileImageUrl"),
+            texto = texto.trim(),
+            dataIso = s.optString("publishedAt"),
+            curtidas = s.optLong("likeCount"),
+            videoId = videoId,
+        )
     }
 }

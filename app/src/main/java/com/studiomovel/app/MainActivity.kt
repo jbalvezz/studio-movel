@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.draw.alpha
@@ -174,6 +175,8 @@ fun App(contas: Contas, aut: Autorizador) {
     var abertoEmail by rememberSaveable { mutableStateOf<String?>(null) }
     var tela by rememberSaveable { mutableStateOf("videos") }     // "videos" ou "caixa"
     var mensagemId by rememberSaveable { mutableStateOf<String?>(null) }
+    var comentVideoId by rememberSaveable { mutableStateOf<String?>(null) }   // null = canal todo
+    var comentTitulo by rememberSaveable { mutableStateOf<String?>(null) }
     val aberto = lista.firstOrNull { it.email == abertoEmail }
 
     when {
@@ -193,10 +196,15 @@ fun App(contas: Contas, aut: Autorizador) {
             voltar = { abertoEmail = null },
             abrir = { mensagemId = it },
         )
+        tela == "comentarios" -> TelaComentarios(
+            conta = aberto, aut = aut, videoId = comentVideoId, tituloVideo = comentTitulo,
+            voltar = { tela = "videos" },
+        )
         else -> TelaVideos(
             conta = aberto, aut = aut,
             voltar = { abertoEmail = null },
             abrirEmail = { tela = "caixa"; mensagemId = null },
+            abrirComentarios = { v -> comentVideoId = v?.id; comentTitulo = v?.titulo; tela = "comentarios" },
         )
     }
 }
@@ -411,14 +419,48 @@ private enum class Filtro(val rotulo: String) {
 }
 
 @Composable
-fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrirEmail: () -> Unit) {
+fun TelaVideos(
+    conta: ContaCanal,
+    aut: Autorizador,
+    voltar: () -> Unit,
+    abrirEmail: () -> Unit,
+    abrirComentarios: (Video?) -> Unit,
+) {
     BackHandler(onBack = voltar)
     val escopo = rememberCoroutineScope()
     var videos by remember { mutableStateOf<List<Video>>(emptyList()) }
     var carregando by remember { mutableStateOf(true) }
     var erro by remember { mutableStateOf<String?>(null) }
     var filtro by rememberSaveable { mutableStateOf(Filtro.TODOS) }
-    val ctx = LocalContext.current
+    var mudando by remember { mutableStateOf<Video?>(null) }
+    var salvando by remember { mutableStateOf(false) }
+    val aviso = remember { SnackbarHostState() }
+
+    fun mudarVisibilidade(v: Video, privacidade: String, agendarPara: String?) {
+        escopo.launch {
+            salvando = true
+            try {
+                val token = aut.token(conta.email) ?: return@launch
+                YouTubeApi.mudarVisibilidade(token, v.id, privacidade, agendarPara)
+                videos = videos.map {
+                    if (it.id == v.id) it.copy(privacidade = privacidade, agendadoPara = agendarPara) else it
+                }
+                mudando = null
+                aviso.showSnackbar(
+                    when {
+                        agendarPara != null -> "Agendado para ${dataHora(agendarPara)}."
+                        privacidade == "public" -> "Agora o vídeo está público!"
+                        privacidade == "unlisted" -> "Agora o vídeo está não listado."
+                        else -> "Agora o vídeo está privado."
+                    }
+                )
+            } catch (e: Exception) {
+                aviso.showSnackbar(mensagemErro(e))
+            } finally {
+                salvando = false
+            }
+        }
+    }
 
     fun carregar() {
         escopo.launch {
@@ -460,6 +502,9 @@ fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrirEma
                     }
                 },
                 actions = {
+                    IconButton(onClick = { abrirComentarios(null) }) {
+                        Icon(Icons.Default.Notifications, contentDescription = "Comentários recentes do canal")
+                    }
                     IconButton(onClick = abrirEmail) {
                         Icon(Icons.Default.Email, contentDescription = "Gmail", tint = MaterialTheme.colorScheme.tertiary)
                     }
@@ -470,6 +515,7 @@ fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrirEma
             )
         },
         containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(aviso) },
     ) { margem ->
         Column(Modifier.padding(margem).fillMaxSize()) {
             Row(
@@ -510,15 +556,26 @@ fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrirEma
                     contentPadding = PaddingValues(12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    items(visiveis, key = { it.id }) { v -> ItemVideo(v) }
+                    items(visiveis, key = { it.id }) { v ->
+                        ItemVideo(v, mudarVisibilidade = { mudando = v }, comentarios = { abrirComentarios(v) })
+                    }
                 }
             }
         }
     }
+
+    mudando?.let { v ->
+        DialogoVisibilidade(
+            v = v,
+            salvando = salvando,
+            confirmar = { p, quando -> mudarVisibilidade(v, p, quando) },
+            cancelar = { mudando = null },
+        )
+    }
 }
 
 @Composable
-fun ItemVideo(v: Video) {
+fun ItemVideo(v: Video, mudarVisibilidade: () -> Unit, comentarios: () -> Unit) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     fun abrirLink(url: String) = ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -543,7 +600,7 @@ fun ItemVideo(v: Video) {
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(4.dp))
-            SeloPrivacidade(v)
+            Box(Modifier.clickable(onClick = mudarVisibilidade)) { SeloPrivacidade(v) }
             Spacer(Modifier.height(2.dp))
             Text(
                 "${numero(v.views)} visualizações · ${numero(v.comentarios)} comentários · ${data(v.publicadoEm)}",
@@ -556,6 +613,14 @@ fun ItemVideo(v: Video) {
                 Icon(Icons.Default.MoreVert, contentDescription = "Opções")
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Mudar visibilidade") },
+                    onClick = { menu = false; mudarVisibilidade() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Comentários (${numero(v.comentarios)})") },
+                    onClick = { menu = false; comentarios() },
+                )
                 DropdownMenuItem(
                     text = { Text("Editar no YouTube Studio") },
                     onClick = { menu = false; abrirLink(studio) },
@@ -634,6 +699,12 @@ fun mensagemErro(e: Exception): String = when (e) {
             "Esta conta não deu a permissão do Gmail. Toque no lápis na tela inicial, remova o canal e adicione de novo, marcando todas as permissões."
         e.codigo == 403 && (e.message ?: "").contains("has not been used", ignoreCase = true) ->
             "A API não está ativada no Google Cloud (passo 2 do guia)."
+        (e.message ?: "").contains("disabled comments", ignoreCase = true) ||
+            (e.message ?: "").contains("commentsDisabled", ignoreCase = true) ->
+            "Os comentários estão desativados neste vídeo."
+        (e.message ?: "").contains("publishAt", ignoreCase = true) ||
+            (e.message ?: "").contains("scheduled", ignoreCase = true) ->
+            "Não deu para agendar: só funciona em vídeos privados que ainda não foram publicados."
         e.codigo == 403 -> "O Google negou o acesso: ${e.message}"
         else -> e.message ?: "Erro ${e.codigo}"
     }
