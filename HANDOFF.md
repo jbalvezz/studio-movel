@@ -62,6 +62,15 @@ vez só por conta; simples, em português, usável com uma mão.
      Ocultar (setModerationStatus=heldForReview → vai para "Em análise" no Studio, reversível).
    - `Rede.kt` ganhou PUT e POST sem corpo. Cota: update/insert/moderar custam 50 cada (limite 10.000/dia).
    - Ainda não feito: editar título/descrição, curtir/fixar comentário, apagar a própria resposta.
+10. **v0.6 (2026-11-26) — e-mail: responder/arquivar/lixeira — AGUARDANDO TESTE do usuário.**
+   - `TelaMensagem` ganhou barra embaixo: Responder (diálogo; `GmailApi.responder` monta MIME text/plain
+     base64 com In-Reply-To/References e threadId → messages/send, cai na mesma conversa), Arquivar
+     (remove INBOX), Lixeira (messages/trash, com confirmação; recuperável por 30 dias).
+   - Contador de não lidos (labels/INBOX threadsUnread) como selo no envelope do cartão do canal.
+     Usa `aut.token(email, silencioso = true)` para nunca abrir janela de permissão na tela inicial.
+   - Lição: o Bash tool transforma `\r\n` dentro de heredoc em quebra real → em Kotlin usei
+     `13.toChar() + 10.toChar()`. Scripts Python grandes: escrever com Write no scratchpad e rodar.
+   - Ainda não feito: buscar e-mails, escrever e-mail novo, anexos.
 - Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
