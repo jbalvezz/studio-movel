@@ -81,7 +81,7 @@ fun TelaComentarios(conta: ContaCanal, aut: Autorizador, videoId: String?, titul
         val faltam = novos.map { it.videoId }.distinct().filter { it.isNotBlank() && it !in titulos }
         try {
             titulos = titulos + YouTubeApi.titulos(token, faltam)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             // sem título não tem problema
         }
     }

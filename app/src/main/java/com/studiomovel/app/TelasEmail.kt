@@ -9,7 +9,9 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,7 +31,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -229,8 +237,29 @@ fun ItemEmail(e: Email, aoTocar: () -> Unit) {
 @Composable
 fun TelaMensagem(conta: ContaCanal, aut: Autorizador, id: String, voltar: () -> Unit) {
     BackHandler(onBack = voltar)
+    val escopo = rememberCoroutineScope()
+    val aviso = remember { SnackbarHostState() }
     var msg by remember { mutableStateOf<EmailCompleto?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
+    var respondendo by remember { mutableStateOf(false) }
+    var confirmarLixeira by remember { mutableStateOf(false) }
+    var ocupado by remember { mutableStateOf(false) }
+
+    /** Roda uma ação no e-mail; se der certo e sairDepois, volta para a caixa. */
+    fun acao(sairDepois: Boolean, sucesso: String, bloco: suspend (String) -> Unit) {
+        escopo.launch {
+            ocupado = true
+            try {
+                val token = aut.token(conta.email) ?: return@launch
+                bloco(token)
+                if (sairDepois) voltar() else aviso.showSnackbar(sucesso)
+            } catch (e: Exception) {
+                aviso.showSnackbar(mensagemErro(e))
+            } finally {
+                ocupado = false
+            }
+        }
+    }
 
     LaunchedEffect(id) {
         try {
@@ -263,6 +292,28 @@ fun TelaMensagem(conta: ContaCanal, aut: Autorizador, id: String, voltar: () -> 
             )
         },
         containerColor = Color.Transparent,
+        snackbarHost = { SnackbarHost(aviso) },
+        bottomBar = {
+            if (msg != null) Row(
+                Modifier.fillMaxWidth().background(CorFundo1).navigationBarsPadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(onClick = { respondendo = true }, enabled = !ocupado, modifier = Modifier.weight(1f)) {
+                    Text("Responder")
+                }
+                OutlinedButton(
+                    onClick = { acao(true, "") { GmailApi.arquivar(it, id) } },
+                    enabled = !ocupado,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Arquivar") }
+                OutlinedButton(
+                    onClick = { confirmarLixeira = true },
+                    enabled = !ocupado,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Lixeira", color = MaterialTheme.colorScheme.tertiary) }
+            }
+        },
     ) { margem ->
         Box(Modifier.padding(margem).fillMaxSize()) {
             val m = msg
@@ -298,6 +349,66 @@ fun TelaMensagem(conta: ContaCanal, aut: Autorizador, id: String, voltar: () -> 
                 }
             }
         }
+    }
+
+    val m = msg
+    if (respondendo && m != null) {
+        var texto by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { if (!ocupado) respondendo = false },
+            title = { Text("Responder") },
+            text = {
+                Column {
+                    Text(
+                        "Para: ${GmailApi.soNome(m.responderPara)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "De: ${conta.email}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = texto,
+                        onValueChange = { texto = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Escreva sua resposta") },
+                        minLines = 5,
+                        enabled = !ocupado,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = texto.isNotBlank() && !ocupado,
+                    onClick = {
+                        val t = texto.trim()
+                        acao(false, "Resposta enviada!") {
+                            GmailApi.responder(it, m, t)
+                            respondendo = false
+                        }
+                    },
+                ) { Text(if (ocupado) "Enviando..." else "Enviar") }
+            },
+            dismissButton = { TextButton(onClick = { respondendo = false }, enabled = !ocupado) { Text("Cancelar") } },
+        )
+    }
+
+    if (confirmarLixeira) {
+        AlertDialog(
+            onDismissRequest = { confirmarLixeira = false },
+            title = { Text("Mandar para a lixeira?") },
+            text = { Text("O e-mail vai para a lixeira do Gmail. Dá para recuperar por lá durante 30 dias.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmarLixeira = false
+                    acao(true, "") { GmailApi.lixeira(it, id) }
+                }) { Text("Mandar para a lixeira") }
+            },
+            dismissButton = { TextButton(onClick = { confirmarLixeira = false }) { Text("Cancelar") } },
+        )
     }
 }
 

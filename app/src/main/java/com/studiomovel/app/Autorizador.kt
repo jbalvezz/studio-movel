@@ -74,14 +74,16 @@ class Autorizador(private val activity: ComponentActivity) {
      * Devolve um "passe de acesso" válido para a conta. Se ainda não houver permissão,
      * mostra a tela do Google pedindo autorização (só na primeira vez).
      * Retorna null se a pessoa cancelar.
+     * silencioso = true: nunca abre janela; se precisar de permissão, só devolve null.
      */
-    suspend fun token(email: String): String? = fila.withLock {
+    suspend fun token(email: String, silencioso: Boolean = false): String? = fila.withLock {
         val pedido = AuthorizationRequest.builder()
             .setRequestedScopes(ESCOPOS)
             .setAccount(Account(email, "com.google"))
             .build()
         val resultado = cliente.authorize(pedido).await()
         if (resultado.hasResolution()) {
+            if (silencioso) return@withLock null
             val pendente = resultado.pendingIntent ?: return@withLock null
             val espera = CompletableDeferred<String?>()
             esperandoPermissao = espera

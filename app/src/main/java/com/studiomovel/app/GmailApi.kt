@@ -25,6 +25,10 @@ data class EmailCompleto(
     val assunto: String,
     val dataMs: Long,
     val html: String,        // corpo pronto para mostrar (texto simples vira HTML)
+    val threadId: String = "",
+    val responderPara: String = "",   // Reply-To, ou o remetente
+    val idMensagem: String = "",      // cabeçalho Message-ID (para a resposta cair na mesma conversa)
+    val referencias: String = "",
 )
 
 class PaginaEmails(val emails: List<Email>, val proxima: String?)
@@ -80,6 +84,10 @@ object GmailApi {
             assunto = (cab["subject"] ?: "").ifBlank { "(sem assunto)" },
             dataMs = m.optString("internalDate").toLongOrNull() ?: 0,
             html = corpo,
+            threadId = m.optString("threadId"),
+            responderPara = (cab["reply-to"] ?: "").ifBlank { cab["from"] ?: "" },
+            idMensagem = cab["message-id"] ?: "",
+            referencias = cab["references"] ?: "",
         )
     }
 
@@ -92,7 +100,46 @@ object GmailApi {
         )
     }
 
+    /** Responde ao e-mail (sai da própria conta, na mesma conversa, e fica em "Enviados"). */
+    suspend fun responder(token: String, m: EmailCompleto, texto: String) {
+        val assunto = if (m.assunto.startsWith("Re:", ignoreCase = true)) m.assunto else "Re: ${m.assunto}"
+        val cab = StringBuilder()
+        val fim = "" + 13.toChar() + 10.toChar() // quebra de linha de e-mail (CR LF)
+        val para = m.responderPara.filter { it != 13.toChar() && it != 10.toChar() }
+        cab.append("To: ").append(para).append(fim)
+        cab.append("Subject: =?UTF-8?B?").append(b64(assunto.toByteArray(Charsets.UTF_8), false)).append("?=").append(fim)
+        if (m.idMensagem.isNotBlank()) {
+            cab.append("In-Reply-To: ").append(m.idMensagem).append(fim)
+            cab.append("References: ").append((m.referencias + " " + m.idMensagem).trim()).append(fim)
+        }
+        cab.append("MIME-Version: 1.0").append(fim)
+        cab.append("Content-Type: text/plain; charset=UTF-8").append(fim)
+        cab.append("Content-Transfer-Encoding: base64").append(fim).append(fim)
+        cab.append(Base64.encodeToString(texto.toByteArray(Charsets.UTF_8), Base64.DEFAULT))
+        val corpo = JSONObject().put("raw", b64(cab.toString().toByteArray(Charsets.UTF_8), true))
+        if (m.threadId.isNotBlank()) corpo.put("threadId", m.threadId)
+        Rede.post("$BASE/messages/send", token, corpo)
+    }
+
+    /** Tira da caixa de entrada (continua em "Todos os e-mails"). */
+    suspend fun arquivar(token: String, id: String) {
+        Rede.post("$BASE/messages/$id/modify", token, JSONObject().put("removeLabelIds", JSONArray().put("INBOX")))
+    }
+
+    /** Manda para a lixeira (o Gmail apaga de vez depois de 30 dias). */
+    suspend fun lixeira(token: String, id: String) {
+        Rede.post("$BASE/messages/$id/trash", token)
+    }
+
+    /** Quantas conversas não lidas há na caixa de entrada. */
+    suspend fun naoLidos(token: String): Int =
+        Rede.get("$BASE/labels/INBOX", token).optInt("threadsUnread")
+
     // ---------- ajudantes ----------
+
+    private fun b64(bytes: ByteArray, urlSafe: Boolean): String =
+        Base64.encodeToString(bytes, Base64.NO_WRAP or (if (urlSafe) Base64.URL_SAFE else 0))
+
 
     private fun rotulos(m: JSONObject): Set<String> {
         val arr = m.optJSONArray("labelIds") ?: return emptySet()

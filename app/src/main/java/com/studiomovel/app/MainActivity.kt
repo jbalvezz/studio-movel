@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.draw.alpha
@@ -115,7 +117,7 @@ class MainActivity : ComponentActivity() {
 // ---------- Tema ----------
 
 // Cores tiradas do ícone: azul-ciano, roxo e vermelho do play.
-private val CorFundo1 = Color(0xFF0B0E22)
+val CorFundo1 = Color(0xFF0B0E22)
 private val CorFundo2 = Color(0xFF16123A)
 val CorCartao = Color(0xFF1D1A44).copy(alpha = 0.78f)
 
@@ -225,7 +227,19 @@ fun TelaCanais(
     var ocupado by remember { mutableStateOf(false) }
     var paraRemover by remember { mutableStateOf<ContaCanal?>(null) }
     var organizando by rememberSaveable { mutableStateOf(false) }
-    val ctx = LocalContext.current
+    var naoLidos by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
+
+    // Conta os e-mails não lidos de cada canal (sem abrir janelas de permissão).
+    LaunchedEffect(lista.map { it.email }) {
+        for (c in lista) {
+            try {
+                val token = aut.token(c.email, silencioso = true) ?: continue
+                naoLidos = naoLidos + (c.email to GmailApi.naoLidos(token))
+            } catch (e: Exception) {
+                // sem contador para essa conta
+            }
+        }
+    }
 
     fun adicionar() {
         escopo.launch {
@@ -324,6 +338,7 @@ fun TelaCanais(
                             organizando = organizando,
                             abrir = { abrir(c) },
                             gmail = { abrirEmail(c) },
+                            naoLidos = naoLidos[c.email] ?: 0,
                             subir = if (i > 0) ({ contas.mover(c.email, -1); aoMudar() }) else null,
                             descer = if (i < lista.lastIndex) ({ contas.mover(c.email, 1); aoMudar() }) else null,
                             remover = { paraRemover = c },
@@ -353,6 +368,7 @@ fun CartaoCanal(
     organizando: Boolean,
     abrir: () -> Unit,
     gmail: () -> Unit,
+    naoLidos: Int,
     subir: (() -> Unit)?,
     descer: (() -> Unit)?,
     remover: () -> Unit,
@@ -395,11 +411,15 @@ fun CartaoCanal(
                 }
             } else {
                 IconButton(onClick = gmail) {
-                    Icon(
-                        Icons.Default.Email,
-                        contentDescription = "Abrir Gmail desta conta",
-                        tint = MaterialTheme.colorScheme.tertiary,
-                    )
+                    BadgedBox(badge = {
+                        if (naoLidos > 0) Badge { Text(if (naoLidos > 99) "99+" else naoLidos.toString()) }
+                    }) {
+                        Icon(
+                            Icons.Default.Email,
+                            contentDescription = "Abrir Gmail desta conta ($naoLidos não lidos)",
+                            tint = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
             }
         }
