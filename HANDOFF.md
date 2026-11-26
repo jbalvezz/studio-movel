@@ -36,12 +36,14 @@ vez só por conta; simples, em português, usável com uma mão.
 5. **Fase 3** — mudar visibilidade (videos.update part=status — mandar o objeto status inteiro para não
    zerar madeForKids/embeddable etc.), comentários (listar/responder/moderar).
 6. **Fase 4** — e-mail (Gmail API).
-7. **Pedidos do usuário após testar a fase 2 (2026-11-25):**
-   - Ícone do app = imagem criada pelo usuário (`Studio_Movel_Icone_120x120.png`, local ainda não informado;
-     120 px é pouco — pedir versão maior, ideal 512×512).
-   - Fundo da tela com imagem discreta (hoje tudo preto).
-   - Reordenar canais na tela inicial (arrastar ou setas ↑↓).
-   - E-mail: no mínimo um botão "Gmail" por canal (atalho rápido) até a caixa unificada da fase 4.
+7. **v0.3 (2026-11-25) — feita e compilada, AGUARDANDO teste no celular:**
+   - Ícone do usuário (`Logo app/Studio_Movel_Vermelho_512x512.png`) → `mipmap-*/ic_launcher_foreground.png`
+     (arte a 60/108 do quadro) sobre fundo radial azul-escuro.
+   - Tema escuro próprio nas cores do ícone (ciano/roxo/vermelho), fundo em degradê com brilhos suaves
+     e marca d'água do ícone (7% opacidade). Cores dinâmicas do Android foram desligadas.
+   - "Organizar canais" (ícone de lápis na tela inicial): setas ↑↓ e remover; ordem salva em `Contas.mover`.
+   - Botão Gmail (envelope vermelho) por canal e na tela de vídeos: abre `mail.google.com/mail/u/<email>/`
+     no navegador. Atalho provisório até a caixa unificada (Fase 4).
 - Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
