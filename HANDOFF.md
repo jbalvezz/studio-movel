@@ -36,7 +36,7 @@ vez só por conta; simples, em português, usável com uma mão.
 5. **Fase 3** — mudar visibilidade (videos.update part=status — mandar o objeto status inteiro para não
    zerar madeForKids/embeddable etc.), comentários (listar/responder/moderar).
 6. **Fase 4** — e-mail (Gmail API).
-7. **v0.3 (2026-11-25) — feita e compilada, AGUARDANDO teste no celular:**
+7. **v0.3 (2026-11-25) — testada (ícone, fundo, organizar ok):**
    - Ícone do usuário (`Logo app/Studio_Movel_Vermelho_512x512.png`) → `mipmap-*/ic_launcher_foreground.png`
      (arte a 60/108 do quadro) sobre fundo radial azul-escuro.
    - Tema escuro próprio nas cores do ícone (ciano/roxo/vermelho), fundo em degradê com brilhos suaves
@@ -46,7 +46,7 @@ vez só por conta; simples, em português, usável com uma mão.
      no navegador. Atalho provisório até a caixa unificada (Fase 4).
    - Gmail pelo navegador NÃO funcionou (v0.3.8 app do Gmail travava; v0.3.9 `/u/<email>` dava 404 e
      `?authuser=` também falhou). Atalho do navegador foi REMOVIDO.
-8. **v0.4 (2026-11-26) — e-mail dentro do app, compilada, AGUARDANDO teste:**
+8. **v0.4 (2026-11-26) — e-mail dentro do app — TESTADA pelo usuário: funcionou.**
    - `Rede.kt` (GET/POST + ErroApi), `GmailApi.kt` (INBOX 25 por página com cabeçalhos em paralelo,
      abrir mensagem format=full, marcar como lido), `TelasEmail.kt` (TelaCaixa, TelaMensagem com WebView
      sem JavaScript; links abrem fora).
