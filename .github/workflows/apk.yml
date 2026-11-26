@@ -54,8 +54,8 @@ jobs:
       - name: Publicar em Releases (link fixo para o celular)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.3.${{ github.run_number }}
-          name: Studio Móvel v0.3.${{ github.run_number }}
+          tag_name: v0.4.${{ github.run_number }}
+          name: Studio Móvel v0.4.${{ github.run_number }}
           body: Baixe o arquivo StudioMovel.apk abaixo e instale no celular.
           files: StudioMovel.apk
           make_latest: true

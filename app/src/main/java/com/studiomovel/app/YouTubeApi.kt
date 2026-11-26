@@ -1,10 +1,6 @@
 package com.studiomovel.app
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
 
 data class Video(
@@ -18,15 +14,13 @@ data class Video(
     val comentarios: Long,
 )
 
-class ErroApi(val codigo: Int, mensagem: String) : Exception(mensagem)
-
 /** Conversa com a YouTube Data API v3. */
 object YouTubeApi {
     private const val BASE = "https://www.googleapis.com/youtube/v3"
 
     /** Dados do canal da conta autorizada. */
     suspend fun meuCanal(token: String, email: String): ContaCanal {
-        val json = get("$BASE/channels?part=snippet,statistics,contentDetails&mine=true", token)
+        val json = Rede.get("$BASE/channels?part=snippet,statistics,contentDetails&mine=true", token)
         val itens = json.optJSONArray("items")
         if (itens == null || itens.length() == 0) {
             throw ErroApi(404, "Esta conta não tem canal no YouTube.")
@@ -48,7 +42,7 @@ object YouTubeApi {
 
     /** Últimos vídeos enviados (inclui não listados e privados, porque é o dono que está pedindo). */
     suspend fun videos(token: String, playlistEnvios: String, maximo: Int = 50): List<Video> {
-        val lista = get(
+        val lista = Rede.get(
             "$BASE/playlistItems?part=contentDetails&maxResults=$maximo&playlistId=" +
                 URLEncoder.encode(playlistEnvios, "UTF-8"),
             token
@@ -58,7 +52,7 @@ object YouTubeApi {
         }
         if (ids.isEmpty()) return emptyList()
 
-        val itens = get(
+        val itens = Rede.get(
             "$BASE/videos?part=snippet,status,statistics&id=" + ids.joinToString(","),
             token
         ).optJSONArray("items") ?: return emptyList()
@@ -82,28 +76,5 @@ object YouTubeApi {
             )
         }
         return ids.mapNotNull { porId[it] } // mantém a ordem: mais recente primeiro
-    }
-
-    private suspend fun get(url: String, token: String): JSONObject = withContext(Dispatchers.IO) {
-        val con = URL(url).openConnection() as HttpURLConnection
-        try {
-            con.setRequestProperty("Authorization", "Bearer $token")
-            con.setRequestProperty("Accept", "application/json")
-            con.connectTimeout = 15_000
-            con.readTimeout = 20_000
-            val codigo = con.responseCode
-            if (codigo !in 200..299) {
-                val corpo = con.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
-                val msg = try {
-                    JSONObject(corpo).getJSONObject("error").optString("message")
-                } catch (e: Exception) {
-                    corpo.take(200)
-                }
-                throw ErroApi(codigo, msg.ifBlank { "Erro $codigo" })
-            }
-            JSONObject(con.inputStream.bufferedReader().use { it.readText() })
-        } finally {
-            con.disconnect()
-        }
     }
 }

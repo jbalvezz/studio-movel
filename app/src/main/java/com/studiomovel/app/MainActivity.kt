@@ -172,18 +172,32 @@ private fun DrawScope.fundo() {
 fun App(contas: Contas, aut: Autorizador) {
     var lista by remember { mutableStateOf(contas.listar()) }
     var abertoEmail by rememberSaveable { mutableStateOf<String?>(null) }
+    var tela by rememberSaveable { mutableStateOf("videos") }     // "videos" ou "caixa"
+    var mensagemId by rememberSaveable { mutableStateOf<String?>(null) }
     val aberto = lista.firstOrNull { it.email == abertoEmail }
 
-    if (aberto == null) {
-        TelaCanais(
+    when {
+        aberto == null -> TelaCanais(
             lista = lista,
             contas = contas,
             aut = aut,
             aoMudar = { lista = contas.listar() },
-            abrir = { abertoEmail = it.email },
+            abrir = { abertoEmail = it.email; tela = "videos" },
+            abrirEmail = { abertoEmail = it.email; tela = "caixa"; mensagemId = null },
         )
-    } else {
-        TelaVideos(conta = aberto, aut = aut, voltar = { abertoEmail = null })
+        tela == "caixa" && mensagemId != null -> TelaMensagem(
+            conta = aberto, aut = aut, id = mensagemId!!, voltar = { mensagemId = null },
+        )
+        tela == "caixa" -> TelaCaixa(
+            conta = aberto, aut = aut,
+            voltar = { abertoEmail = null },
+            abrir = { mensagemId = it },
+        )
+        else -> TelaVideos(
+            conta = aberto, aut = aut,
+            voltar = { abertoEmail = null },
+            abrirEmail = { tela = "caixa"; mensagemId = null },
+        )
     }
 }
 
@@ -196,6 +210,7 @@ fun TelaCanais(
     aut: Autorizador,
     aoMudar: () -> Unit,
     abrir: (ContaCanal) -> Unit,
+    abrirEmail: (ContaCanal) -> Unit,
 ) {
     val escopo = rememberCoroutineScope()
     val aviso = remember { SnackbarHostState() }
@@ -300,7 +315,7 @@ fun TelaCanais(
                             c = c,
                             organizando = organizando,
                             abrir = { abrir(c) },
-                            gmail = { abrirGmail(ctx, c.email) },
+                            gmail = { abrirEmail(c) },
                             subir = if (i > 0) ({ contas.mover(c.email, -1); aoMudar() }) else null,
                             descer = if (i < lista.lastIndex) ({ contas.mover(c.email, 1); aoMudar() }) else null,
                             remover = { paraRemover = c },
@@ -383,37 +398,6 @@ fun CartaoCanal(
     }
 }
 
-/**
- * Abre o Gmail da conta certa NO NAVEGADOR.
- * Não pode ir pelo app do Gmail: ele "pega" o link mail.google.com, não entende a conta na URL e trava.
- * Por isso o link vai direto para o navegador (de preferência o Chrome).
- */
-fun abrirGmail(ctx: android.content.Context, email: String) {
-    // "?authuser=" escolhe a conta se ela já estiver logada no navegador;
-    // se não estiver, o Google mostra a tela de login com o e-mail já preenchido (o formato /u/e-mail dava erro 404).
-    val uri = Uri.parse("https://mail.google.com/mail/?authuser=" + Uri.encode(email))
-    val pm = ctx.packageManager
-    // Descobre qual é o navegador do celular perguntando "quem abre um site qualquer?"
-    val padrao = pm.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com")), 0)
-        ?.activityInfo?.packageName
-    val candidatos = listOfNotNull(
-        padrao?.takeIf { it != "android" && it != "com.google.android.gm" },
-        "com.android.chrome",
-        "com.sec.android.app.sbrowser", // Samsung Internet
-    )
-    for (pacote in candidatos) {
-        val intent = Intent(Intent.ACTION_VIEW, uri).setPackage(pacote)
-            .addCategory(Intent.CATEGORY_BROWSABLE)
-        try {
-            ctx.startActivity(intent)
-            return
-        } catch (e: android.content.ActivityNotFoundException) {
-            // tenta o próximo navegador
-        }
-    }
-    android.widget.Toast.makeText(ctx, "Nenhum navegador encontrado para abrir o Gmail.", android.widget.Toast.LENGTH_LONG).show()
-}
-
 @Composable
 fun barraTransparente() = TopAppBarDefaults.topAppBarColors(
     containerColor = Color.Transparent,
@@ -427,7 +411,7 @@ private enum class Filtro(val rotulo: String) {
 }
 
 @Composable
-fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit) {
+fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrirEmail: () -> Unit) {
     BackHandler(onBack = voltar)
     val escopo = rememberCoroutineScope()
     var videos by remember { mutableStateOf<List<Video>>(emptyList()) }
@@ -476,7 +460,7 @@ fun TelaVideos(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit) {
                     }
                 },
                 actions = {
-                    IconButton(onClick = { abrirGmail(ctx, conta.email) }) {
+                    IconButton(onClick = abrirEmail) {
                         Icon(Icons.Default.Email, contentDescription = "Gmail", tint = MaterialTheme.colorScheme.tertiary)
                     }
                     IconButton(onClick = { carregar() }, enabled = !carregando) {
@@ -646,7 +630,11 @@ fun mensagemErro(e: Exception): String = when (e) {
         e.codigo == 401 -> "O acesso expirou. Toque em atualizar para entrar de novo."
         e.codigo == 403 && (e.message ?: "").contains("quota", ignoreCase = true) ->
             "Limite diário do YouTube atingido. Volta a funcionar amanhã."
-        e.codigo == 403 -> "O YouTube negou o acesso: ${e.message}"
+        e.codigo == 403 && (e.message ?: "").contains("insufficient", ignoreCase = true) ->
+            "Esta conta não deu a permissão do Gmail. Toque no lápis na tela inicial, remova o canal e adicione de novo, marcando todas as permissões."
+        e.codigo == 403 && (e.message ?: "").contains("has not been used", ignoreCase = true) ->
+            "A API não está ativada no Google Cloud (passo 2 do guia)."
+        e.codigo == 403 -> "O Google negou o acesso: ${e.message}"
         else -> e.message ?: "Erro ${e.codigo}"
     }
     is java.io.IOException -> "Sem conexão com a internet."
