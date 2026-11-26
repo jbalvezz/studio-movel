@@ -52,7 +52,7 @@ vez só por conta; simples, em português, usável com uma mão.
      sem JavaScript; links abrem fora).
    - Envelope ✉️ no cartão do canal e na tela de vídeos abre a caixa daquele canal.
    - Falta na fase 4: responder, arquivar, buscar, contador de não lidos no cartão.
-9. **v0.5 (2026-11-26) — Fase 3 — AGUARDANDO TESTE do usuário.**
+9. **v0.5 (2026-11-26) — Fase 3 — TESTADA pelo usuário: funcionou.**
    - Visibilidade: tocar no selo do vídeo (ou menu ⋮ → Mudar visibilidade) → Público / Não listado /
      Privado / Agendar (data+hora; vira private + publishAt). `YouTubeApi.mudarVisibilidade` lê o status
      atual e reenvia os campos graváveis (embeddable, license, publicStatsViewable, selfDeclaredMadeForKids,
