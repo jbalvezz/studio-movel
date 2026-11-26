@@ -13,7 +13,7 @@ vez só por conta; simples, em português, usável com uma mão.
 
 ## Estado atual (2026-11-25)
 - **Fase 1 feita:** Google Cloud com projeto, APIs, consentimento Externo em "Testando", 8 usuários de teste, sem logo.
-- **Fase 2 — APK compila no GitHub Actions ✅** (release v0.2.6, `StudioMovel.apk` ~7,9 MB). Ainda NÃO testado no celular.
+- **Fase 2 — APK compila no GitHub Actions ✅** (release v0.2.6, `StudioMovel.apk` ~7,9 MB). **Testado pelo usuário no celular: instalou, adicionou os canais, tudo ok.**
   Link fixo: https://github.com/jbalvezz/studio-movel/releases/latest/download/StudioMovel.apk
   - Projeto Kotlin/Compose em `app/` (pacote `com.studiomovel.app`, minSdk 26, AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1 no CI).
   - `Autorizador.kt` (seletor de conta do Android + AuthorizationClient por conta), `YouTubeApi.kt`
@@ -31,7 +31,8 @@ vez só por conta; simples, em português, usável com uma mão.
    Status das builds (repo público): `https://api.github.com/repos/jbalvezz/studio-movel/actions/runs`.
 3. ~~Passo 6 (segredos)~~ **Feito.** Se uma build falhar, o erro do Kotlin/Gradle aparece como anotação pública:
    `api.github.com/repos/jbalvezz/studio-movel/check-runs/<job_id>/annotations` (logs exigem login).
-4. **Usuário:** passo 7 (Pages, Branding com links, publicar) e passo 8 (instalar, adicionar canais).
+4. ~~Passo 7~~ **Feito: app "Em produção"** (não verificado, limite 100 usuários; aviso amarelo "precisa ser
+   verificado" é esperado — NÃO enviar para verificação). ~~Passo 8~~ **Feito.** → **Próximo: Fase 3.**
 5. **Fase 3** — mudar visibilidade (videos.update part=status — mandar o objeto status inteiro para não
    zerar madeForKids/embeddable etc.), comentários (listar/responder/moderar).
 6. **Fase 4** — e-mail (Gmail API). 7. Ícone do usuário (`Studio_Movel_Icone_120x120.png`) como ícone do app.
