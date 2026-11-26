@@ -44,9 +44,10 @@ jobs:
       - name: Mostrar erro da compilação
         if: failure()
         run: |
-          grep -E "^e: |What went wrong|Could not|error:|> " build.log | head -n 40 | while IFS= read -r linha; do
-            echo "::error::$linha"
-          done
+          { grep -E "^e: |^w: .*error" build.log; grep -A 12 "What went wrong" build.log; } | grep -v "^> Task" | head -n 60 > erro.txt || true
+          msg=$(sed ':a;N;$!ba;s/%/%25/g;s///g;s/
+/%0A/g' erro.txt)
+          echo "::error title=Erro de compilacao::$msg"
 
       - name: Renomear APK
         run: cp app/build/outputs/apk/release/app-release.apk StudioMovel.apk
