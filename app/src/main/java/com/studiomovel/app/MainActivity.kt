@@ -389,7 +389,9 @@ fun CartaoCanal(
  * Por isso o link vai direto para o navegador (de preferência o Chrome).
  */
 fun abrirGmail(ctx: android.content.Context, email: String) {
-    val uri = Uri.parse("https://mail.google.com/mail/u/" + Uri.encode(email) + "/#inbox")
+    // "?authuser=" escolhe a conta se ela já estiver logada no navegador;
+    // se não estiver, o Google mostra a tela de login com o e-mail já preenchido (o formato /u/e-mail dava erro 404).
+    val uri = Uri.parse("https://mail.google.com/mail/?authuser=" + Uri.encode(email))
     val pm = ctx.packageManager
     // Descobre qual é o navegador do celular perguntando "quem abre um site qualquer?"
     val padrao = pm.resolveActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.example.com")), 0)
