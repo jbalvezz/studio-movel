@@ -14,6 +14,15 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.Arrangement
@@ -78,13 +87,16 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
     var ocupado by remember { mutableStateOf(false) }
     val aviso = remember { SnackbarHostState() }
     val selecionando = selecionados.isNotEmpty()
-    BackHandler { if (selecionando) selecionados = emptySet() else voltar() }
     val escopo = rememberCoroutineScope()
     var emails by remember { mutableStateOf<List<Email>>(emptyList()) }
     var proxima by remember { mutableStateOf<String?>(null) }
     var carregando by remember { mutableStateOf(true) }
     var carregandoMais by remember { mutableStateOf(false) }
     var erro by remember { mutableStateOf<String?>(null) }
+    var buscaAberta by remember { mutableStateOf(false) }
+    var textoBusca by remember { mutableStateOf("") }
+    var busca by remember { mutableStateOf<String?>(null) }   // busca aplicada
+    var escrevendo by remember { mutableStateOf(false) }
 
     fun carregar() {
         escopo.launch {
@@ -95,7 +107,7 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
                 if (token == null) {
                     erro = "Permissão não concedida."
                 } else {
-                    val p = GmailApi.caixaDeEntrada(token)
+                    val p = GmailApi.caixaDeEntrada(token, busca = busca)
                     emails = p.emails
                     proxima = p.proxima
                 }
@@ -113,7 +125,7 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
             carregandoMais = true
             try {
                 val token = aut.token(conta.email) ?: return@launch
-                val p = GmailApi.caixaDeEntrada(token, pagina)
+                val p = GmailApi.caixaDeEntrada(token, pagina, busca)
                 emails = emails + p.emails.filter { novo -> emails.none { it.id == novo.id } }
                 proxima = p.proxima
             } catch (e: Exception) {
@@ -124,6 +136,22 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
         }
     }
     LaunchedEffect(conta.email) { carregar() }
+
+    fun fecharBusca() {
+        buscaAberta = false
+        textoBusca = ""
+        if (busca != null) {
+            busca = null
+            carregar()
+        }
+    }
+    BackHandler {
+        when {
+            selecionando -> selecionados = emptySet()
+            buscaAberta -> fecharBusca()
+            else -> voltar()
+        }
+    }
 
     /** Arquiva ou manda para a lixeira todos os selecionados. */
     fun emLote(lixeira: Boolean) {
@@ -169,6 +197,36 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
                         Text("Lixeira", color = MaterialTheme.colorScheme.tertiary)
                     }
                 },
+            ) else if (buscaAberta) TopAppBar(
+                title = {
+                    TextField(
+                        value = textoBusca,
+                        onValueChange = { textoBusca = it },
+                        placeholder = { Text("Buscar e-mails") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            busca = textoBusca.trim().ifBlank { null }
+                            carregar()
+                        }),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.Transparent,
+                            unfocusedContainerColor = Color.Transparent,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                },
+                colors = barraTransparente(),
+                navigationIcon = {
+                    IconButton(onClick = { fecharBusca() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Fechar busca")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { busca = textoBusca.trim().ifBlank { null }; carregar() }) {
+                        Icon(Icons.Default.Search, contentDescription = "Buscar")
+                    }
+                },
             ) else TopAppBar(
                 title = {
                     Column {
@@ -189,10 +247,20 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
                     }
                 },
                 actions = {
+                    IconButton(onClick = { buscaAberta = true }) {
+                        Icon(Icons.Default.Search, contentDescription = "Buscar e-mails")
+                    }
                     IconButton(onClick = { carregar() }, enabled = !carregando) {
                         Icon(Icons.Default.Refresh, contentDescription = "Atualizar")
                     }
                 },
+            )
+        },
+        floatingActionButton = {
+            if (!selecionando) ExtendedFloatingActionButton(
+                onClick = { escrevendo = true },
+                icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                text = { Text("Escrever") },
             )
         },
         containerColor = Color.Transparent,
@@ -210,14 +278,18 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
                     Spacer(Modifier.height(12.dp))
                     TextButton(onClick = { carregar() }) { Text("Tentar de novo") }
                 }
-                emails.isEmpty() -> Text("Caixa de entrada vazia.", Modifier.align(Alignment.Center))
+                emails.isEmpty() -> Text(
+                    if (busca != null) "Nada encontrado para \"$busca\"." else "Caixa de entrada vazia.",
+                    Modifier.align(Alignment.Center).padding(32.dp),
+                )
                 else -> LazyColumn(
                     contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (!selecionando) item {
                         Text(
-                            "Dica: segure o dedo num e-mail para selecionar vários.",
+                            if (busca != null) "Resultados para \"$busca\" (em todos os e-mails)"
+                            else "Dica: segure o dedo num e-mail para selecionar vários.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 4.dp, bottom = 2.dp),
@@ -263,6 +335,101 @@ fun TelaCaixa(conta: ContaCanal, aut: Autorizador, voltar: () -> Unit, abrir: (S
             dismissButton = { TextButton(onClick = { confirmarLixeira = false }) { Text("Cancelar") } },
         )
     }
+
+    if (escrevendo) {
+        DialogoEscrever(
+            conta = conta,
+            aut = aut,
+            fechar = { escrevendo = false },
+            enviado = {
+                escrevendo = false
+                escopo.launch { aviso.showSnackbar("E-mail enviado!") }
+            },
+        )
+    }
+}
+
+/** Janela para escrever um e-mail novo, saindo da conta do canal. */
+@Composable
+fun DialogoEscrever(conta: ContaCanal, aut: Autorizador, fechar: () -> Unit, enviado: () -> Unit) {
+    val escopo = rememberCoroutineScope()
+    var para by remember { mutableStateOf("") }
+    var assunto by remember { mutableStateOf("") }
+    var texto by remember { mutableStateOf("") }
+    var enviando by remember { mutableStateOf(false) }
+    var erro by remember { mutableStateOf<String?>(null) }
+    val enderecos = para.split(",", ";").map { it.trim() }.filter { it.isNotBlank() }
+    val paraValido = enderecos.isNotEmpty() && enderecos.all { Regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$").matches(it) }
+
+    AlertDialog(
+        onDismissRequest = { if (!enviando) fechar() },
+        title = { Text("Novo e-mail") },
+        text = {
+            Column {
+                Text(
+                    "De: ${conta.email}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = para,
+                    onValueChange = { para = it },
+                    label = { Text("Para") },
+                    placeholder = { Text("nome@exemplo.com") },
+                    singleLine = true,
+                    isError = para.isNotBlank() && !paraValido,
+                    supportingText = { Text("Para mais de um, separe com vírgula.") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                    enabled = !enviando,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = assunto,
+                    onValueChange = { assunto = it.replace("\n", " ") },
+                    label = { Text("Assunto") },
+                    singleLine = true,
+                    enabled = !enviando,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = texto,
+                    onValueChange = { texto = it },
+                    label = { Text("Mensagem") },
+                    minLines = 5,
+                    enabled = !enviando,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (erro != null) Text(
+                    erro ?: "",
+                    color = MaterialTheme.colorScheme.tertiary,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = paraValido && texto.isNotBlank() && !enviando,
+                onClick = {
+                    escopo.launch {
+                        enviando = true
+                        erro = null
+                        try {
+                            val token = aut.token(conta.email) ?: return@launch
+                            GmailApi.escrever(token, enderecos.joinToString(", "), assunto.trim(), texto.trim())
+                            enviado()
+                        } catch (e: Exception) {
+                            erro = mensagemErro(e)
+                        } finally {
+                            enviando = false
+                        }
+                    }
+                },
+            ) { Text(if (enviando) "Enviando..." else "Enviar") }
+        },
+        dismissButton = { TextButton(onClick = fechar, enabled = !enviando) { Text("Cancelar") } },
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)

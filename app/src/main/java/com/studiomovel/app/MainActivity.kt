@@ -8,6 +8,9 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.clickable
@@ -456,6 +459,31 @@ fun TelaVideos(
     var editando by remember { mutableStateOf<Video?>(null) }
     var salvando by remember { mutableStateOf(false) }
     val aviso = remember { SnackbarHostState() }
+    var miniaturaDe by remember { mutableStateOf<Video?>(null) }
+    var enviandoMiniatura by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+    val escolherImagem = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val v = miniaturaDe
+        miniaturaDe = null
+        if (uri == null || v == null) return@rememberLauncherForActivityResult
+        escopo.launch {
+            enviandoMiniatura = true
+            try {
+                val jpeg = prepararMiniatura(ctx, uri)
+                val token = aut.token(conta.email) ?: return@launch
+                YouTubeApi.trocarMiniatura(token, v.id, jpeg)
+                // muda o endereço para a imagem nova aparecer (senão fica a antiga guardada)
+                videos = videos.map {
+                    if (it.id == v.id) it.copy(miniatura = it.miniatura.substringBefore("?") + "?t=" + System.currentTimeMillis()) else it
+                }
+                aviso.showSnackbar("Miniatura trocada! Pode levar alguns minutos para aparecer em todo lugar.")
+            } catch (e: Exception) {
+                aviso.showSnackbar(mensagemErro(e))
+            } finally {
+                enviandoMiniatura = false
+            }
+        }
+    }
 
     fun mudarVisibilidade(v: Video, privacidade: String, agendarPara: String?) {
         escopo.launch {
@@ -557,6 +585,7 @@ fun TelaVideos(
                     )
                 }
             }
+            if (enviandoMiniatura) LinearProgressIndicator(Modifier.fillMaxWidth().padding(top = 6.dp))
             when {
                 carregando -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -583,6 +612,10 @@ fun TelaVideos(
                             mudarVisibilidade = { mudando = v },
                             comentarios = { abrirComentarios(v) },
                             editar = { editando = v },
+                            trocarMiniatura = {
+                                miniaturaDe = v
+                                escolherImagem.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
                         )
                     }
                 }
@@ -615,7 +648,13 @@ fun TelaVideos(
 }
 
 @Composable
-fun ItemVideo(v: Video, mudarVisibilidade: () -> Unit, comentarios: () -> Unit, editar: () -> Unit) {
+fun ItemVideo(
+    v: Video,
+    mudarVisibilidade: () -> Unit,
+    comentarios: () -> Unit,
+    editar: () -> Unit,
+    trocarMiniatura: () -> Unit,
+) {
     val ctx = LocalContext.current
     var menu by remember { mutableStateOf(false) }
     fun abrirLink(url: String) = ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -654,8 +693,12 @@ fun ItemVideo(v: Video, mudarVisibilidade: () -> Unit, comentarios: () -> Unit, 
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
-                    text = { Text("Editar título e descrição") },
+                    text = { Text("Editar título, descrição e tags") },
                     onClick = { menu = false; editar() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Trocar miniatura") },
+                    onClick = { menu = false; trocarMiniatura() },
                 )
                 DropdownMenuItem(
                     text = { Text("Mudar visibilidade") },
@@ -749,9 +792,37 @@ fun mensagemErro(e: Exception): String = when (e) {
         (e.message ?: "").contains("publishAt", ignoreCase = true) ||
             (e.message ?: "").contains("scheduled", ignoreCase = true) ->
             "Não deu para agendar: só funciona em vídeos privados que ainda não foram publicados."
+        (e.message ?: "").contains("thumbnail", ignoreCase = true) ->
+            "O YouTube não deixou trocar a miniatura. O canal precisa estar verificado por telefone (youtube.com/verify)."
         e.codigo == 403 -> "O Google negou o acesso: ${e.message}"
         else -> e.message ?: "Erro ${e.codigo}"
     }
     is java.io.IOException -> "Sem conexão com a internet."
     else -> e.message ?: "Algo deu errado."
 }
+
+/** Lê a imagem escolhida, reduz para no máximo 1280 px de largura e salva em JPEG com menos de 2 MB. */
+suspend fun prepararMiniatura(ctx: android.content.Context, uri: Uri): ByteArray =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val limites = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        ctx.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, limites) }
+        var amostra = 1
+        while (limites.outWidth / (amostra * 2) >= 1280) amostra *= 2
+        val opcoes = android.graphics.BitmapFactory.Options().apply { inSampleSize = amostra }
+        val original = ctx.contentResolver.openInputStream(uri)?.use {
+            android.graphics.BitmapFactory.decodeStream(it, null, opcoes)
+        } ?: throw ErroApi(0, "Não consegui abrir essa imagem.")
+        val imagem = if (original.width > 1280) {
+            val altura = (original.height * 1280.0 / original.width).toInt()
+            android.graphics.Bitmap.createScaledBitmap(original, 1280, altura, true)
+        } else original
+        var qualidade = 92
+        var bytes: ByteArray
+        do {
+            val saida = java.io.ByteArrayOutputStream()
+            imagem.compress(android.graphics.Bitmap.CompressFormat.JPEG, qualidade, saida)
+            bytes = saida.toByteArray()
+            qualidade -= 10
+        } while (bytes.size > 2_000_000 && qualidade > 20)
+        bytes
+    }

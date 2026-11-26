@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 
 private const val MAX_TITULO = 100
 private const val MAX_DESCRICAO = 5000
+private const val MAX_TAGS = 500
 
 /** Janela para editar o título e a descrição de um vídeo. */
 @Composable
@@ -42,15 +43,17 @@ fun DialogoEditar(
     val escopo = rememberCoroutineScope()
     var titulo by remember { mutableStateOf(v.titulo) }
     var descricao by remember { mutableStateOf<String?>(null) } // null = carregando
+    var tagsTexto by remember { mutableStateOf("") }
     var salvando by remember { mutableStateOf(false) }
     var erro by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(v.id) {
         try {
             val token = aut.token(conta.email) ?: run { erro = "Permissão não concedida."; return@LaunchedEffect }
-            val (t, d) = YouTubeApi.textos(token, v.id)
+            val (t, d, tags) = YouTubeApi.textos(token, v.id)
             titulo = t
             descricao = d
+            tagsTexto = tags.joinToString(", ")
         } catch (e: Exception) {
             erro = mensagemErro(e)
         }
@@ -60,12 +63,15 @@ fun DialogoEditar(
     val temSinais = titulo.contains('<') || titulo.contains('>') ||
         (descricao ?: "").contains('<') || (descricao ?: "").contains('>')
     val bytesDescricao = (descricao ?: "").toByteArray(Charsets.UTF_8).size
+    val tags = tagsTexto.split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct()
+    // O YouTube conta tags com espaço como se tivessem aspas (+2).
+    val tamanhoTags = tags.sumOf { it.length + (if (it.contains(' ')) 2 else 0) } + (tags.size - 1).coerceAtLeast(0)
     val valido = titulo.isNotBlank() && titulo.length <= MAX_TITULO &&
-        bytesDescricao <= MAX_DESCRICAO && !temSinais && descricao != null
+        bytesDescricao <= MAX_DESCRICAO && !temSinais && descricao != null && tamanhoTags <= MAX_TAGS
 
     AlertDialog(
         onDismissRequest = { if (!salvando) fechar() },
-        title = { Text("Editar vídeo") },
+        title = { Text("Editar título, descrição e tags") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 when {
@@ -94,6 +100,17 @@ fun DialogoEditar(
                             minLines = 4,
                             modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
                         )
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = tagsTexto,
+                            onValueChange = { tagsTexto = it.replace("\n", " ") },
+                            label = { Text("Tags (separe com vírgula)") },
+                            supportingText = { Text("${tags.size} tags · $tamanhoTags/$MAX_TAGS") },
+                            isError = tamanhoTags > MAX_TAGS,
+                            enabled = !salvando,
+                            minLines = 2,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                         if (temSinais) Text(
                             "O YouTube não aceita os sinais < e >. Tire-os para salvar.",
                             color = MaterialTheme.colorScheme.tertiary,
@@ -118,7 +135,7 @@ fun DialogoEditar(
                         try {
                             val token = aut.token(conta.email) ?: return@launch
                             val t = titulo.trim()
-                            YouTubeApi.editarTextos(token, v.id, t, descricao ?: "")
+                            YouTubeApi.editarTextos(token, v.id, t, descricao ?: "", tags)
                             salvo(t)
                         } catch (e: Exception) {
                             erro = mensagemErro(e)

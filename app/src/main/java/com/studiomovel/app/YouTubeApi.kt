@@ -156,26 +156,37 @@ object YouTubeApi {
         Rede.post("$BASE/comments/setModerationStatus?id=$comentarioId&moderationStatus=heldForReview", token)
     }
 
-    /** Título e descrição atuais do vídeo. */
-    suspend fun textos(token: String, videoId: String): Pair<String, String> {
+    /** Título, descrição e tags atuais do vídeo. */
+    suspend fun textos(token: String, videoId: String): Triple<String, String, List<String>> {
         val s = Rede.get("$BASE/videos?part=snippet&id=$videoId", token)
             .optJSONArray("items")?.optJSONObject(0)?.optJSONObject("snippet")
             ?: throw ErroApi(404, "Vídeo não encontrado.")
-        return s.optString("title") to s.optString("description")
+        val arr = s.optJSONArray("tags")
+        val tags = (0 until (arr?.length() ?: 0)).map { arr!!.getString(it) }
+        return Triple(s.optString("title"), s.optString("description"), tags)
+    }
+
+    /** Troca a miniatura (JPEG até 2 MB). O canal precisa estar verificado por telefone no YouTube. */
+    suspend fun trocarMiniatura(token: String, videoId: String, jpeg: ByteArray) {
+        Rede.enviarArquivo(
+            "https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=$videoId&uploadType=media",
+            token, jpeg, "image/jpeg",
+        )
     }
 
     /**
      * Troca título e descrição. Lê o snippet atual e reenvia categoria, tags e idiomas,
      * porque o YouTube apaga o que não for mandado de volta.
      */
-    suspend fun editarTextos(token: String, videoId: String, titulo: String, descricao: String) {
+    suspend fun editarTextos(token: String, videoId: String, titulo: String, descricao: String, tags: List<String>) {
         val atual = Rede.get("$BASE/videos?part=snippet&id=$videoId", token)
             .optJSONArray("items")?.optJSONObject(0)?.optJSONObject("snippet")
             ?: throw ErroApi(404, "Vídeo não encontrado.")
         val novo = JSONObject()
-        for (campo in listOf("categoryId", "tags", "defaultLanguage", "defaultAudioLanguage")) {
+        for (campo in listOf("categoryId", "defaultLanguage", "defaultAudioLanguage")) {
             if (atual.has(campo)) novo.put(campo, atual.get(campo))
         }
+        novo.put("tags", org.json.JSONArray().apply { tags.forEach { put(it) } })
         novo.put("title", titulo)
         novo.put("description", descricao)
         Rede.put(

@@ -37,8 +37,10 @@ class PaginaEmails(val emails: List<Email>, val proxima: String?)
 object GmailApi {
     private const val BASE = "https://gmail.googleapis.com/gmail/v1/users/me"
 
-    suspend fun caixaDeEntrada(token: String, pagina: String? = null): PaginaEmails = coroutineScope {
-        var url = "$BASE/messages?labelIds=INBOX&maxResults=25"
+    /** Caixa de entrada; com "busca", procura em todos os e-mails (igual à busca do Gmail). */
+    suspend fun caixaDeEntrada(token: String, pagina: String? = null, busca: String? = null): PaginaEmails = coroutineScope {
+        var url = if (busca.isNullOrBlank()) "$BASE/messages?labelIds=INBOX&maxResults=25"
+        else "$BASE/messages?maxResults=25&q=" + URLEncoder.encode(busca, "UTF-8")
         if (pagina != null) url += "&pageToken=" + URLEncoder.encode(pagina, "UTF-8")
         val lista = Rede.get(url, token)
         val ids = lista.optJSONArray("messages")?.let { arr ->
@@ -111,21 +113,32 @@ object GmailApi {
 
     suspend fun responder(token: String, m: EmailCompleto, texto: String, meuEmail: String) {
         val assunto = if (m.assunto.startsWith("Re:", ignoreCase = true)) m.assunto else "Re: ${m.assunto}"
+        enviar(token, destinoResposta(m, meuEmail), assunto, texto, m.idMensagem, m.referencias, m.threadId)
+    }
+
+    /** Escreve um e-mail novo. "para" pode ter vários endereços separados por vírgula. */
+    suspend fun escrever(token: String, para: String, assunto: String, texto: String) =
+        enviar(token, para, assunto, texto, "", "", "")
+
+    private suspend fun enviar(
+        token: String, destino: String, assunto: String, texto: String,
+        idMensagem: String, referencias: String, threadId: String,
+    ) {
         val cab = StringBuilder()
         val fim = "" + 13.toChar() + 10.toChar() // quebra de linha de e-mail (CR LF)
-        val para = destinoResposta(m, meuEmail).filter { it != 13.toChar() && it != 10.toChar() }
+        val para = destino.filter { it != 13.toChar() && it != 10.toChar() }
         cab.append("To: ").append(para).append(fim)
         cab.append("Subject: =?UTF-8?B?").append(b64(assunto.toByteArray(Charsets.UTF_8), false)).append("?=").append(fim)
-        if (m.idMensagem.isNotBlank()) {
-            cab.append("In-Reply-To: ").append(m.idMensagem).append(fim)
-            cab.append("References: ").append((m.referencias + " " + m.idMensagem).trim()).append(fim)
+        if (idMensagem.isNotBlank()) {
+            cab.append("In-Reply-To: ").append(idMensagem).append(fim)
+            cab.append("References: ").append((referencias + " " + idMensagem).trim()).append(fim)
         }
         cab.append("MIME-Version: 1.0").append(fim)
         cab.append("Content-Type: text/plain; charset=UTF-8").append(fim)
         cab.append("Content-Transfer-Encoding: base64").append(fim).append(fim)
         cab.append(Base64.encodeToString(texto.toByteArray(Charsets.UTF_8), Base64.DEFAULT))
         val corpo = JSONObject().put("raw", b64(cab.toString().toByteArray(Charsets.UTF_8), true))
-        if (m.threadId.isNotBlank()) corpo.put("threadId", m.threadId)
+        if (threadId.isNotBlank()) corpo.put("threadId", threadId)
         Rede.post("$BASE/messages/send", token, corpo)
     }
 

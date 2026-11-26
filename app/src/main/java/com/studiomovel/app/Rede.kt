@@ -18,6 +18,36 @@ object Rede {
     suspend fun put(url: String, token: String, corpo: JSONObject): JSONObject =
         chamar("PUT", url, token, corpo)
 
+    /** Envia um arquivo (ex.: imagem da miniatura) como corpo da requisição. */
+    suspend fun enviarArquivo(url: String, token: String, bytes: ByteArray, tipo: String): JSONObject =
+        withContext(Dispatchers.IO) {
+            val con = URL(url).openConnection() as HttpURLConnection
+            try {
+                con.requestMethod = "POST"
+                con.setRequestProperty("Authorization", "Bearer $token")
+                con.setRequestProperty("Content-Type", tipo)
+                con.connectTimeout = 15_000
+                con.readTimeout = 60_000
+                con.doOutput = true
+                con.setFixedLengthStreamingMode(bytes.size)
+                con.outputStream.use { it.write(bytes) }
+                val codigo = con.responseCode
+                if (codigo !in 200..299) {
+                    val texto = con.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                    val msg = try {
+                        JSONObject(texto).getJSONObject("error").optString("message")
+                    } catch (e: Exception) {
+                        texto.take(200)
+                    }
+                    throw ErroApi(codigo, msg.ifBlank { "Erro $codigo" })
+                }
+                val texto = con.inputStream.bufferedReader().use { it.readText() }
+                if (texto.isBlank()) JSONObject() else JSONObject(texto)
+            } finally {
+                con.disconnect()
+            }
+        }
+
     private suspend fun chamar(metodo: String, url: String, token: String, corpo: JSONObject?): JSONObject =
         withContext(Dispatchers.IO) {
             val con = URL(url).openConnection() as HttpURLConnection
