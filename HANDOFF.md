@@ -44,6 +44,8 @@ vez só por conta; simples, em português, usável com uma mão.
    - "Organizar canais" (ícone de lápis na tela inicial): setas ↑↓ e remover; ordem salva em `Contas.mover`.
    - Botão Gmail (envelope vermelho) por canal e na tela de vídeos: abre `mail.google.com/mail/u/<email>/`
      no navegador. Atalho provisório até a caixa unificada (Fase 4).
+   - v0.3.8: o link mail.google.com era capturado pelo app do Gmail, que travava ("Gmail apresenta falhas").
+     Agora abre com setPackage no navegador padrão / Chrome / Samsung Internet (+ <queries> no manifest).
 - Chave: usuário fez backup em pendrive. Recomendado manter também uma 2ª cópia (Drive particular).
 
 ## Decisões técnicas (podem ser revistas)
