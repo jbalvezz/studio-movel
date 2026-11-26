@@ -13,7 +13,8 @@ vez só por conta; simples, em português, usável com uma mão.
 
 ## Estado atual (2026-11-25)
 - **Fase 1 feita:** Google Cloud com projeto, APIs, consentimento Externo em "Testando", 8 usuários de teste, sem logo.
-- **Fase 2 — código escrito, ainda NÃO compilado** (não há Java/SDK no PC; compila no GitHub Actions):
+- **Fase 2 — APK compila no GitHub Actions ✅** (release v0.2.6, `StudioMovel.apk` ~7,9 MB). Ainda NÃO testado no celular.
+  Link fixo: https://github.com/jbalvezz/studio-movel/releases/latest/download/StudioMovel.apk
   - Projeto Kotlin/Compose em `app/` (pacote `com.studiomovel.app`, minSdk 26, AGP 8.7.3, Kotlin 2.0.21, Gradle 8.11.1 no CI).
   - `Autorizador.kt` (seletor de conta do Android + AuthorizationClient por conta), `YouTubeApi.kt`
     (canal + últimos 50 vídeos com visibilidade/views/comentários), `Contas.kt` (lista no SharedPreferences),
@@ -21,7 +22,6 @@ vez só por conta; simples, em português, usável com uma mão.
   - `.github/workflows/apk.yml` gera APK assinado e publica em Releases (`StudioMovel.apk`).
   - `docs/` = página inicial + política de privacidade (GitHub Pages).
   - Chave de assinatura gerada (PKCS12) em `chave-assinatura/` — **fora do git**. SHA-1 em `chave-assinatura/SHA1.txt`.
-  - Git iniciado (branch `main`), arquivos no stage, **sem commit e sem remoto ainda**.
 - Instalado no PC (com OK do usuário): pacote Python `cryptography` (--user).
 
 ## Pendências (ordem)
@@ -29,8 +29,8 @@ vez só por conta; simples, em português, usável com uma mão.
 2. ~~Commit + push~~ **Feito**: https://github.com/jbalvezz/studio-movel (branch `main`). Push pelo
    terminal do app (o Git Credential Manager abre o navegador; o Bash não-interativo não consegue).
    Status das builds (repo público): `https://api.github.com/repos/jbalvezz/studio-movel/actions/runs`.
-3. **Usuário:** passo 6 (segredos KEYSTORE_BASE64/KEYSTORE_PASSWORD + Run workflow). Se o build falhar,
-   ler o log do Actions e corrigir (primeira compilação real do código!).
+3. ~~Passo 6 (segredos)~~ **Feito.** Se uma build falhar, o erro do Kotlin/Gradle aparece como anotação pública:
+   `api.github.com/repos/jbalvezz/studio-movel/check-runs/<job_id>/annotations` (logs exigem login).
 4. **Usuário:** passo 7 (Pages, Branding com links, publicar) e passo 8 (instalar, adicionar canais).
 5. **Fase 3** — mudar visibilidade (videos.update part=status — mandar o objeto status inteiro para não
    zerar madeForKids/embeddable etc.), comentários (listar/responder/moderar).
