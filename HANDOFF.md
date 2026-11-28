@@ -79,7 +79,7 @@ vez só por conta; simples, em português, usável com uma mão.
      snippet atual e reenvia categoryId/tags/idiomas (senão o YouTube apaga). Limites: título 100, descrição
      5000 bytes, sem < >.
    - Ideias futuras: buscar e-mails, escrever e-mail novo, curtir/fixar comentário, editar tags/miniatura.
-12. **v0.8 (2026-11-26) — AGUARDANDO TESTE do usuário.**
+12. **v0.8 (2026-11-26) — TESTADA pelo usuário em 2026-11-28: funcionou.**
    - E-mail: lupa na caixa → busca em todos os e-mails (`messages?q=`, mesma sintaxe do Gmail);
      botão "Escrever" → `DialogoEscrever` (vários destinatários separados por vírgula). `GmailApi.enviar`
      é o montador MIME comum para responder e escrever.
